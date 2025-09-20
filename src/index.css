@@ -1,0 +1,27 @@
+/* src/index.css */
+:root {
+  --bg-primary: #121212;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #242424;
+  --text-primary: #ffffff;
+  --text-secondary: #a7a7a7;
+  --accent-cyan: #00ffff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  overflow: hidden; /* Prevents body scroll */
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}

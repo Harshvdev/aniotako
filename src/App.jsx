@@ -31,7 +31,7 @@ function App() {
   // Effect for fetching user's anime list in real-time
   useEffect(() => {
     if (!user) {
-      setAnimeList([]); // Clear list if user logs out
+      setAnimeList([]);
       setListLoading(false);
       return;
     }
@@ -49,7 +49,7 @@ function App() {
       setListLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount or user change
+    return () => unsubscribe();
   }, [user]);
 
   if (authLoading) {
@@ -73,6 +73,7 @@ function App() {
           />
         )}
         {view === "add-anime" && (
+          // This is the crucial prop connection that was needed.
           <AddAnime user={user} existingAnimeList={animeList} />
         )}
       </main>

@@ -4,8 +4,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore"; // Import Firestore functions
-import { auth, db } from "../firebase"; // Import auth and db instances
+import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // Import serverTimestamp
+import { auth, db } from "../firebase";
 
 const AuthPage = () => {
   const [email, setEmail] = useState("");
@@ -17,7 +17,6 @@ const AuthPage = () => {
       return;
     }
     try {
-      // 1. Create the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -25,14 +24,11 @@ const AuthPage = () => {
       );
       const user = userCredential.user;
 
-      // 2. Create a corresponding document in the 'users' collection
-      // The document ID will be the user's UID
+      // Create the user document in Firestore to satisfy the security rules
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
-        createdAt: new Date(),
+        createdAt: serverTimestamp(), // Use server's timestamp for accuracy
       });
-
-      // No need to manually log in; onAuthStateChanged will handle the redirect
     } catch (error) {
       alert(`Error Signing Up: ${error.message}`);
     }

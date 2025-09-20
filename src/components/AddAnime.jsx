@@ -1,6 +1,6 @@
 // src/components/AddAnime.jsx
 import React, { useState } from "react";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, doc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import "./styles.css";
 
@@ -8,52 +8,67 @@ const AddAnime = ({ user, existingAnimeList }) => {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null); // Tracks which menu is open
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!query) return;
 
     setIsLoading(true);
+    setSearchResults([]);
     try {
-      const response = await fetch(`https://api.jikan.moe/v4/anime?q=${query}`);
+      const response = await fetch(`https://api.jikan.moe/v4/anime?q=${query}&limit=20`);
       const data = await response.json();
       setSearchResults(data.data || []);
     } catch (error) {
       console.error("Error fetching from Jikan API:", error);
+      alert("Failed to fetch search results.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAddAnime = async (anime, status) => {
-    if (!user) return;
+    if (!user) {
+      alert("You must be logged in to add anime.");
+      return;
+    }
 
-    // **FIX: Check if anime already exists in the user's list**
     const isAlreadyAdded = existingAnimeList.some(
       (item) => item.mal_id === anime.mal_id
     );
 
     if (isAlreadyAdded) {
-      alert(`'${anime.title}' is already in your list.`);
+      alert(`'${anime.title}' is already in one of your lists.`);
       return;
     }
 
     try {
-      const newAnime = {
+      const batch = writeBatch(db);
+
+      const newAnimeData = {
         mal_id: anime.mal_id,
         title: anime.title,
         image: anime.images.jpg.image_url,
         status: status,
         progress: 0,
         total_episodes: anime.episodes || "N/A",
+        createdAt: serverTimestamp(), // Fulfills Requirement #2
       };
+      
+      const newAnimeRef = doc(collection(db, "users", user.uid, "anime"));
+      batch.set(newAnimeRef, newAnimeData);
 
-      await addDoc(collection(db, "users", user.uid, "anime"), newAnime);
+      const userDocRef = doc(db, "users", user.uid);
+      batch.update(userDocRef, { lastAnimeAddedAt: serverTimestamp() }); // Fulfills Requirement #3
+
+      await batch.commit();
+      
       alert(`Added '${anime.title}' to your '${status.replace("-", " ")}' list!`);
-      setOpenMenuId(null); // Close menu after adding
+      setOpenMenuId(null);
     } catch (error) {
-      console.error("Error adding anime:", error);
+      console.error("Error adding anime with batch:", error);
+      alert(`Failed to add anime. You may be trying to add too quickly. Please wait a moment and try again.`);
     }
   };
 
@@ -82,31 +97,18 @@ const AddAnime = ({ user, existingAnimeList }) => {
               <div key={anime.mal_id} className="anime-card">
                 <button
                   className="options-menu-btn"
-                  style={{ opacity: 1 }} // Always visible on search results
+                  style={{ opacity: 1 }}
                   onClick={() => setOpenMenuId(openMenuId === anime.mal_id ? null : anime.mal_id)}
                 >
                   ...
                 </button>
                 {openMenuId === anime.mal_id && (
                   <div className="options-dropdown">
-                    <button
-                      className="menu-item"
-                      onClick={() => handleAddAnime(anime, "watching")}
-                    >
-                      Add to Watching
-                    </button>
-                    <button
-                      className="menu-item"
-                      onClick={() => handleAddAnime(anime, "plan-to-watch")}
-                    >
-                      Add to Plan to Watch
-                    </button>
-                    <button
-                      className="menu-item"
-                      onClick={() => handleAddAnime(anime, "completed")}
-                    >
-                      Add to Completed
-                    </button>
+                    <button className="menu-item" onClick={() => handleAddAnime(anime, "watching")}>Add to Watching</button>
+                    <button className="menu-item" onClick={() => handleAddAnime(anime, "plan-to-watch")}>Add to Plan to Watch</button>
+                    <button className="menu-item" onClick={() => handleAddAnime(anime, "completed")}>Add to Completed</button>
+                    <button className="menu-item" onClick={() => handleAddAnime(anime, "on-hold")}>Add to On-Hold</button>
+                    <button className="menu-item" onClick={() => handleAddAnime(anime, "dropped")}>Add to Dropped</button>
                   </div>
                 )}
                 <img src={anime.images.jpg.image_url} alt={anime.title} />
@@ -122,7 +124,6 @@ const AddAnime = ({ user, existingAnimeList }) => {
   );
 };
 
-// Local styles for this component
 const styles = {
   searchForm: { display: "flex", gap: "10px", marginBottom: "24px" },
   searchInput: {

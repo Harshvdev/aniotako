@@ -17,7 +17,6 @@
   font-weight: 700;
   color: var(--accent-cyan);
   text-align: center;
-  margin-bottom: 40px;
 }
 
 .nav-list {
@@ -40,6 +39,30 @@
 
 .nav-item a:hover,
 .nav-item a.active {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Style for the new logout button */
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1em;
+}
+
+.nav-button:hover {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -420,37 +443,4 @@
 
 .toast-button-cancel:hover {
   background-color: var(--bg-secondary);
-}
-
-
-/* === RESPONSIVENESS (MOBILE-FIRST) === */
-@media (max-width: 768px) {
-  .sidebar {
-    display: none; /* Hide the sidebar on small screens */
-  }
-
-  .topbar {
-    padding: 12px 16px; /* Reduce padding on mobile */
-  }
-
-  /* Hide the user's email on mobile to save space, show only the avatar */
-  .user-profile span {
-    display: none;
-  }
-
-  .user-profile {
-    padding: 4px;
-  }
-
-  .dashboard-content {
-    padding: 16px; /* Reduce padding on mobile */
-  }
-
-  .anime-list-section {
-    padding: 16px;
-  }
-
-  .anime-list-section h2 {
-    font-size: 18px;
-  }
 }

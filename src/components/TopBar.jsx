@@ -1,14 +1,13 @@
 // src/components/TopBar.jsx
-
 import React, { useState, useEffect, useRef } from "react";
 import "./styles.css";
 
-const TopBar = ({ user, onAddAnime }) => {
+const TopBar = ({ user, onAddAnime, onMenuClick }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Added loading state
-  const [error, setError] = useState(null); // Added error state
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const searchContainerRef = useRef(null);
 
   // Debounced search effect
@@ -70,6 +69,12 @@ const TopBar = ({ user, onAddAnime }) => {
 
   return (
     <header className="topbar">
+      <button className="hamburger-btn" onClick={onMenuClick}>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
       <div className="user-profile">
         <img src="https://i.pravatar.cc/150?img=58" alt="User Avatar" />
         <span>{user ? user.email : "User"}</span>

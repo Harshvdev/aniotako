@@ -1,0 +1,128 @@
+/* src/Responsive.css */
+
+/* --- Base Layout Adjustments --- */
+.main-content {
+  flex-grow: 1;
+  transition: margin-left 0.3s ease-in-out;
+  width: 100%;
+}
+
+/* --- Mobile-First Elements (Hidden on Desktop) --- */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 2rem;
+  height: 2rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  z-index: 200;
+}
+
+.hamburger-btn span {
+  width: 2rem;
+  height: 0.25rem;
+  background: var(--text-primary);
+  border-radius: 10px;
+  transition: all 0.3s linear;
+  position: relative;
+  transform-origin: 1px;
+}
+
+.close-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 2.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: center; /* Centered on desktop */
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.sidebar-header .logo {
+  margin-bottom: 0;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: none; /* Hidden by default */
+}
+
+.app-container.sidebar-open .overlay {
+  display: block;
+}
+
+/* --- Mobile View (max-width: 768px) --- */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 100;
+    border-right: 1px solid var(--bg-tertiary);
+    width: 280px;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar-header {
+    justify-content: space-between; /* Space out on mobile */
+  }
+
+  .hamburger-btn, .close-btn {
+    display: flex;
+  }
+
+  .topbar {
+    padding: 12px 16px;
+  }
+
+  .user-profile span {
+    display: none;
+  }
+
+  .user-profile {
+    padding: 4px;
+  }
+
+  .dashboard-content {
+    padding: 16px;
+  }
+
+  .anime-list-section {
+    padding: 16px;
+  }
+
+  .anime-list-section h2 {
+    font-size: 18px;
+  }
+}
+
+/* --- Desktop View (min-width: 769px) --- */
+@media (min-width: 769px) {
+  .sidebar {
+    position: static;
+    transform: translateX(0);
+    height: 100vh;
+  }
+}

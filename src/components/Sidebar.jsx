@@ -4,7 +4,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import "./styles.css";
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -14,9 +14,12 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? "open" : ""}`}>
       <div>
-        <div className="logo">ANIOTAKO</div>
+        <div className="sidebar-header">
+          <div className="logo">ANIOTAKO</div>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
         <nav>
           <ul className="nav-list">
             <li className="nav-item">
@@ -45,9 +48,9 @@ const Sidebar = () => {
 
       <ul className="nav-list">
         <li className="nav-item">
-          <a href="#" onClick={handleLogout}>
+          <button className="nav-button" onClick={handleLogout}>
             <span>🚪</span> Log Out
-          </a>
+          </button>
         </li>
       </ul>
     </aside>

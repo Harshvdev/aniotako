@@ -10,12 +10,14 @@ import TopBar from "./components/TopBar";
 import Dashboard from "./components/Dashboard";
 import AuthPage from "./components/AuthPage";
 import "./App.css";
+import "./Responsive.css"; // <-- ADD THIS NEW CSS FILE
 
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [animeList, setAnimeList] = useState([]);
   const [listLoading, setListLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // <-- Add sidebar state
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -92,7 +94,7 @@ function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
       <Toaster
         position="bottom-center"
         toastOptions={{
@@ -103,9 +105,14 @@ function App() {
           },
         }}
       />
-      <Sidebar />
+      {isSidebarOpen && <div className="overlay" onClick={() => setIsSidebarOpen(false)}></div>}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <main className="main-content">
-        <TopBar user={user} onAddAnime={handleAddAnime} />
+        <TopBar
+          user={user}
+          onAddAnime={handleAddAnime}
+          onMenuClick={() => setIsSidebarOpen(true)}
+        />
         <Dashboard
           user={user}
           animeList={animeList}

@@ -1,9 +1,8 @@
 // src/components/Dashboard.jsx
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../firebase";
 import { toast } from "react-hot-toast";
+import { Link } from "react-router-dom"; // <-- IMPORT LINK
+import { useData } from "../context/DataContext";
 import "./styles.css";
 
 // Moved outside the component to prevent re-creation on every render.
@@ -16,6 +15,7 @@ const ALL_STATUSES = [
 ];
 
 const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
+  // ... This entire component remains IDENTICAL to before ...
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditingProgress, setIsEditingProgress] = useState(false);
   const [editableProgress, setEditableProgress] = useState(anime.progress);
@@ -38,7 +38,6 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
 
   const handleIncrement = (e) => {
     e.stopPropagation();
-    // Added client-side check to prevent incrementing past the total.
     if (totalEpisodes > 0 && currentProgress >= totalEpisodes) {
       toast("Already completed!");
       return;
@@ -105,6 +104,7 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
       <button
         className="options-menu-btn"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
           setIsMenuOpen(!isMenuOpen);
         }}
@@ -118,14 +118,20 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
             <button
               key={status.key}
               className="menu-item"
-              onClick={(e) => handleStatusChange(e, status.key)}
+              onClick={(e) => {
+                e.preventDefault();
+                handleStatusChange(e, status.key);
+              }}
             >
               Move to {status.label}
             </button>
           ))}
           <button
             className="menu-item delete-item"
-            onClick={handleDeleteClick}
+            onClick={(e) => {
+                e.preventDefault();
+                handleDeleteClick(e);
+            }}
           >
             Delete
           </button>
@@ -143,8 +149,9 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
                 className="progress-input"
                 value={editableProgress}
                 onChange={(e) => setEditableProgress(e.target.value)}
-                onBlur={handleSaveProgress}
-                onKeyDown={handleKeyDown}
+                onBlur={(e) => { e.preventDefault(); handleSaveProgress(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); handleKeyDown(e); }}
+                onClick={(e) => e.preventDefault()}
                 min="0"
                 max={totalEpisodes > 0 ? totalEpisodes : undefined}
                 autoFocus
@@ -152,7 +159,8 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
             ) : (
               <p
                 className="anime-progress progress-text"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   setEditableProgress(currentProgress);
                   setIsEditingProgress(true);
                 }}
@@ -167,8 +175,8 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
           )}
           {(anime.status === "watching" || anime.status === "on-hold") && (
             <div className="progress-buttons-container">
-              <button className="progress-increment-btn" onClick={handleDecrement}>-</button>
-              <button className="progress-increment-btn" onClick={handleIncrement}>+</button>
+              <button className="progress-increment-btn" onClick={(e) => { e.preventDefault(); handleDecrement(e); }}>-</button>
+              <button className="progress-increment-btn" onClick={(e) => { e.preventDefault(); handleIncrement(e); }}>+</button>
             </div>
           )}
         </div>
@@ -177,52 +185,22 @@ const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
   );
 };
 
-const Dashboard = ({ user, animeList, isLoading }) => {
-  const handleUpdateProgress = async (docId, newProgress) => {
-    const anime = animeList.find((a) => a.id === docId);
-    if (!anime) return;
-    const totalEpisodes = parseInt(anime.total_episodes, 10) || Infinity;
-    const validatedProgress = parseInt(newProgress, 10);
-    if (isNaN(validatedProgress) || validatedProgress < 0) return;
-    if (validatedProgress > totalEpisodes) {
-      toast.error(`Progress cannot exceed ${totalEpisodes} episodes.`);
-      return;
-    }
-    const animeDocRef = doc(db, "users", user.uid, "anime", docId);
-    await updateDoc(animeDocRef, { progress: validatedProgress });
-    toast.success("Progress updated!");
-  };
-
-  const handleUpdateStatus = async (docId, newStatus) => {
-    const animeDocRef = doc(db, "users", user.uid, "anime", docId);
-    const anime = animeList.find((a) => a.id === docId);
-    if (!anime) return;
-    const updateData = { status: newStatus };
-    if (newStatus === "completed" && anime.total_episodes) {
-      updateData.progress = parseInt(anime.total_episodes, 10);
-    }
-    if (newStatus === "watching" && anime.status !== "watching") {
-      updateData.progress = 0;
-    }
-    await updateDoc(animeDocRef, updateData);
-    toast.success(`Moved to ${newStatus.replace("-", " ")}!`);
-  };
-
-  const handleDeleteAnime = async (docId) => {
-    const animeDocRef = doc(db, "users", user.uid, "anime", docId);
-    await deleteDoc(animeDocRef);
-    toast.error("Anime removed from your list.");
-  };
+const Dashboard = () => {
+  const { 
+    animeList, 
+    listLoading, 
+    handleUpdateProgress, 
+    handleUpdateStatus, 
+    handleDeleteAnime 
+  } = useData();
   
-  // Use useMemo to prevent re-filtering the list on every render.
   const watchingAnime = useMemo(() => animeList.filter((a) => a.status === "watching"), [animeList]);
   const planToWatchAnime = useMemo(() => animeList.filter((a) => a.status === "plan-to-watch"), [animeList]);
   const completedAnime = useMemo(() => animeList.filter((a) => a.status === "completed"), [animeList]);
   const onHoldAnime = useMemo(() => animeList.filter((a) => a.status === "on-hold"), [animeList]);
   const droppedAnime = useMemo(() => animeList.filter((a) => a.status === "dropped"), [animeList]);
 
-
-  if (isLoading) {
+  if (listLoading) {
     return (
       <div className="dashboard-content">
         <h2>Loading your library...</h2>
@@ -236,13 +214,14 @@ const Dashboard = ({ user, animeList, isLoading }) => {
       {list.length > 0 ? (
         <div className="anime-grid">
           {list.map((anime) => (
-            <AnimeCard
-              key={anime.id}
-              anime={anime}
-              onUpdateProgress={handleUpdateProgress}
-              onUpdateStatus={handleUpdateStatus}
-              onDelete={handleDeleteAnime}
-            />
+            <Link to={`/anime/${anime.mal_id}`} key={anime.id} className="anime-card-link">
+              <AnimeCard
+                anime={anime}
+                onUpdateProgress={handleUpdateProgress}
+                onUpdateStatus={handleUpdateStatus}
+                onDelete={handleDeleteAnime}
+              />
+            </Link>
           ))}
         </div>
       ) : (

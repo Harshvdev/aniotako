@@ -444,3 +444,113 @@
 .toast-button-cancel:hover {
   background-color: var(--bg-secondary);
 }
+
+/* === Anime Card Link Wrapper === */
+.anime-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block; /* Ensures the link takes up the full card space */
+}
+
+/* === Anime Detail Page Styles === */
+.detail-page-container {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.detail-page-header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--bg-tertiary);
+  padding-bottom: 16px;
+}
+
+.detail-page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 16px;
+}
+
+.back-button {
+  display: inline-block;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.back-button:hover {
+  background-color: var(--accent-cyan);
+  color: var(--bg-primary);
+}
+
+.detail-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 32px;
+}
+
+.detail-left img {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.detail-right h2 {
+  font-size: 20px;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  background-color: var(--bg-secondary);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.detail-meta span {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.detail-meta span strong {
+  color: var(--text-primary);
+}
+
+.detail-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.genre-tag {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.synopsis {
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* --- Responsive for Detail Page --- */
+@media (max-width: 768px) {
+  .detail-content {
+    grid-template-columns: 1fr; /* Stack on mobile */
+  }
+  .detail-left {
+    max-width: 250px;
+    margin: 0 auto;
+  }
+}

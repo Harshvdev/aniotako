@@ -4,18 +4,22 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // Import serverTimestamp
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 const AuthPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSignUp = async () => {
     if (!email || !password) {
-      alert("Please enter both email and password.");
+      setError("Please enter both email and password.");
       return;
     }
+    setIsLoading(true);
+    setError("");
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -23,26 +27,30 @@ const AuthPage = () => {
         password
       );
       const user = userCredential.user;
-
-      // Create the user document in Firestore to satisfy the security rules
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
-        createdAt: serverTimestamp(), // Use server's timestamp for accuracy
+        createdAt: serverTimestamp(),
       });
     } catch (error) {
-      alert(`Error Signing Up: ${error.message}`);
+      setError(error.message.replace("Firebase: ", ""));
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert("Please enter both email and password.");
+      setError("Please enter both email and password.");
       return;
     }
+    setIsLoading(true);
+    setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      alert(`Error Logging In: ${error.message}`);
+      setError(error.message.replace("Firebase: ", ""));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -56,6 +64,7 @@ const AuthPage = () => {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email Address"
           style={styles.input}
+          disabled={isLoading}
         />
         <input
           type="password"
@@ -63,13 +72,15 @@ const AuthPage = () => {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           style={styles.input}
+          disabled={isLoading}
         />
+        {error && <p style={styles.errorText}>{error}</p>}
         <div style={styles.buttonGroup}>
-          <button onClick={handleLogin} style={styles.loginButton}>
-            Login
+          <button onClick={handleLogin} style={styles.loginButton} disabled={isLoading}>
+            {isLoading ? "Logging in..." : "Login"}
           </button>
-          <button onClick={handleSignUp} style={styles.signUpButton}>
-            Sign Up
+          <button onClick={handleSignUp} style={styles.signUpButton} disabled={isLoading}>
+            {isLoading ? "Signing up..." : "Sign Up"}
           </button>
         </div>
       </div>
@@ -138,6 +149,12 @@ const styles = {
     fontSize: "16px",
     cursor: "pointer",
   },
+  errorText: {
+    color: "#ff6b6b",
+    textAlign: 'center',
+    fontSize: '14px',
+    margin: '-10px 0 0 0',
+  }
 };
 
 export default AuthPage;

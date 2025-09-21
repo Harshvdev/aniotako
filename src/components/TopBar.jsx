@@ -1,13 +1,16 @@
 // src/components/TopBar.jsx
 import React, { useState, useEffect, useRef } from "react";
+import { useData } from "../context/DataContext";
 import "./styles.css";
 
-const TopBar = ({ user, onAddAnime, onMenuClick }) => {
+const TopBar = ({ onMenuClick }) => {
+  const { user, handleAddAnime } = useData(); // <-- Get data from context
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [addingId, setAddingId] = useState(null); // <-- State to track which anime is being added
   const searchContainerRef = useRef(null);
 
   // Debounced search effect
@@ -38,9 +41,8 @@ const TopBar = ({ user, onAddAnime, onMenuClick }) => {
         .finally(() => {
           setIsLoading(false);
         });
-    }, 500); // 500ms debounce delay
+    }, 500);
 
-    // Cleanup function to clear timeout and abort fetch
     return () => {
       clearTimeout(handler);
       controller.abort();
@@ -52,32 +54,35 @@ const TopBar = ({ user, onAddAnime, onMenuClick }) => {
     const handleClickOutside = (event) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
         setIsFocused(false);
-        setResults([]);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-
-  const handleAdd = (anime) => {
-    onAddAnime(anime);
-    setQuery("");
-    setResults([]);
-    setIsFocused(false);
+  const handleAdd = async (anime) => {
+    setAddingId(anime.mal_id);
+    try {
+      await handleAddAnime(anime);
+      setQuery("");
+      setResults([]);
+      setIsFocused(false);
+    } catch (error) {
+      // Errors are already toasted in the context function
+    } finally {
+      setAddingId(null);
+    }
   };
 
   return (
     <header className="topbar">
       <button className="hamburger-btn" onClick={onMenuClick}>
-        <span></span>
-        <span></span>
-        <span></span>
+        <span></span><span></span><span></span>
       </button>
 
       <div className="user-profile">
-        <img src="https://i.pravatar.cc/150?img=58" alt="User Avatar" />
-        <span>{user ? user.email : "User"}</span>
+        <img src={`https://ui-avatars.com/api/?name=${user.email}&background=0D8ABC&color=fff`} alt="User Avatar" />
+        <span>{user.email}</span>
       </div>
 
       <div className="search-container" ref={searchContainerRef}>
@@ -95,14 +100,19 @@ const TopBar = ({ user, onAddAnime, onMenuClick }) => {
           <div className="search-results-dropdown">
             {isLoading && <div className="search-result-message">Loading...</div>}
             {error && <div className="search-result-message error">{error}</div>}
-            {!isLoading && !error && results.length === 0 && (
+            {!isLoading && !error && results.length === 0 && query.length >= 3 && (
               <div className="search-result-message">No results found.</div>
             )}
             {results.map((anime) => (
               <div key={anime.mal_id} className="search-result-item">
                 <img src={anime.images.jpg.small_image_url} alt={anime.title} />
                 <span>{anime.title}</span>
-                <button onClick={() => handleAdd(anime)}>Add</button>
+                <button
+                  onClick={() => handleAdd(anime)}
+                  disabled={addingId === anime.mal_id}
+                >
+                  {addingId === anime.mal_id ? "Adding..." : "Add"}
+                </button>
               </div>
             ))}
           </div>

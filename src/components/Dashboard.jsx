@@ -1,33 +1,27 @@
 // src/components/Dashboard.jsx
-import React, { useState, useEffect, useRef } from "react";
+
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { toast } from "react-hot-toast";
 import "./styles.css";
 
-// --- Fully Dynamic & Interactive AnimeCard Component ---
-const AnimeCard = ({
-  anime,
-  onUpdateProgress,
-  onUpdateStatus,
-  onDelete,
-}) => {
+// Moved outside the component to prevent re-creation on every render.
+const ALL_STATUSES = [
+  { key: "watching", label: "Watching" },
+  { key: "completed", label: "Completed" },
+  { key: "on-hold", label: "On-Hold" },
+  { key: "plan-to-watch", label: "Plan to Watch" },
+  { key: "dropped", label: "Dropped" },
+];
+
+const AnimeCard = ({ anime, onUpdateProgress, onUpdateStatus, onDelete }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditingProgress, setIsEditingProgress] = useState(false);
   const [editableProgress, setEditableProgress] = useState(anime.progress);
   const menuRef = useRef(null);
 
-  const ALL_STATUSES = [
-    { key: "watching", label: "Watching" },
-    { key: "completed", label: "Completed" },
-    { key: "on-hold", label: "On-Hold" },
-    { key: "plan-to-watch", label: "Plan to Watch" },
-    { key: "dropped", label: "Dropped" },
-  ];
-
-  // Dynamically generate menu options based on current status
-  const availableStatuses = ALL_STATUSES.filter(
-    (status) => status.key !== anime.status
-  );
+  const availableStatuses = ALL_STATUSES.filter((s) => s.key !== anime.status);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -35,12 +29,8 @@ const AnimeCard = ({
         setIsMenuOpen(false);
       }
     };
-    if (isMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    if (isMenuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isMenuOpen]);
 
   const currentProgress = parseInt(anime.progress, 10) || 0;
@@ -48,6 +38,11 @@ const AnimeCard = ({
 
   const handleIncrement = (e) => {
     e.stopPropagation();
+    // Added client-side check to prevent incrementing past the total.
+    if (totalEpisodes > 0 && currentProgress >= totalEpisodes) {
+      toast("Already completed!");
+      return;
+    }
     onUpdateProgress(anime.id, currentProgress + 1);
   };
 
@@ -65,9 +60,11 @@ const AnimeCard = ({
     }
     setIsEditingProgress(false);
   };
-
+  
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSaveProgress();
+    if (e.key === "Enter") {
+      handleSaveProgress();
+    }
   };
 
   const handleStatusChange = (e, newStatus) => {
@@ -76,11 +73,30 @@ const AnimeCard = ({
     setIsMenuOpen(false);
   };
 
-  const handleDelete = (e) => {
+  const handleDeleteClick = (e) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${anime.title}"?`)) {
-      onDelete(anime.id);
-    }
+    toast(
+      (t) => (
+        <span style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          Delete <b>{anime.title}</b>?
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              className="toast-button-confirm"
+              onClick={() => {
+                onDelete(anime.id);
+                toast.dismiss(t.id);
+              }}
+            >
+              Confirm
+            </button>
+            <button className="toast-button-cancel" onClick={() => toast.dismiss(t.id)}>
+              Cancel
+            </button>
+          </div>
+        </span>
+      ),
+      { duration: 5000 }
+    );
     setIsMenuOpen(false);
   };
 
@@ -109,7 +125,7 @@ const AnimeCard = ({
           ))}
           <button
             className="menu-item delete-item"
-            onClick={(e) => handleDelete(e)}
+            onClick={handleDeleteClick}
           >
             Delete
           </button>
@@ -120,7 +136,7 @@ const AnimeCard = ({
       <div className="anime-info">
         <p className="anime-title">{anime.title}</p>
         <div className="progress-container">
-          {anime.status === "watching" || anime.status === "on-hold" ? ( // Also show progress for on-hold
+          {(anime.status === "watching" || anime.status === "on-hold") ? (
             isEditingProgress ? (
               <input
                 type="number"
@@ -145,7 +161,9 @@ const AnimeCard = ({
               </p>
             )
           ) : (
-            <p className="anime-progress">{anime.status.replace(/-/g, " ")}</p>
+            <p className="anime-progress">
+              {anime.status.replace(/-/g, " ")}
+            </p>
           )}
           {(anime.status === "watching" || anime.status === "on-hold") && (
             <div className="progress-buttons-container">
@@ -159,51 +177,58 @@ const AnimeCard = ({
   );
 };
 
-// --- Dashboard Component ---
 const Dashboard = ({ user, animeList, isLoading }) => {
   const handleUpdateProgress = async (docId, newProgress) => {
-    // ... (This function remains unchanged)
     const anime = animeList.find((a) => a.id === docId);
     if (!anime) return;
     const totalEpisodes = parseInt(anime.total_episodes, 10) || Infinity;
     const validatedProgress = parseInt(newProgress, 10);
     if (isNaN(validatedProgress) || validatedProgress < 0) return;
-    if (validatedProgress > totalEpisodes) return;
+    if (validatedProgress > totalEpisodes) {
+      toast.error(`Progress cannot exceed ${totalEpisodes} episodes.`);
+      return;
+    }
     const animeDocRef = doc(db, "users", user.uid, "anime", docId);
     await updateDoc(animeDocRef, { progress: validatedProgress });
+    toast.success("Progress updated!");
   };
 
   const handleUpdateStatus = async (docId, newStatus) => {
     const animeDocRef = doc(db, "users", user.uid, "anime", docId);
     const anime = animeList.find((a) => a.id === docId);
     if (!anime) return;
-
     const updateData = { status: newStatus };
-
-    // If moving to completed, set progress to max
     if (newStatus === "completed" && anime.total_episodes) {
       updateData.progress = parseInt(anime.total_episodes, 10);
     }
-    // If moving to watching, reset progress
     if (newStatus === "watching" && anime.status !== "watching") {
       updateData.progress = 0;
     }
-
     await updateDoc(animeDocRef, updateData);
+    toast.success(`Moved to ${newStatus.replace("-", " ")}!`);
   };
 
   const handleDeleteAnime = async (docId) => {
-    // ... (This function remains unchanged)
     const animeDocRef = doc(db, "users", user.uid, "anime", docId);
     await deleteDoc(animeDocRef);
+    toast.error("Anime removed from your list.");
   };
+  
+  // Use useMemo to prevent re-filtering the list on every render.
+  const watchingAnime = useMemo(() => animeList.filter((a) => a.status === "watching"), [animeList]);
+  const planToWatchAnime = useMemo(() => animeList.filter((a) => a.status === "plan-to-watch"), [animeList]);
+  const completedAnime = useMemo(() => animeList.filter((a) => a.status === "completed"), [animeList]);
+  const onHoldAnime = useMemo(() => animeList.filter((a) => a.status === "on-hold"), [animeList]);
+  const droppedAnime = useMemo(() => animeList.filter((a) => a.status === "dropped"), [animeList]);
 
-  // Filter into all five lists
-  const watchingAnime = animeList.filter((a) => a.status === "watching");
-  const planToWatchAnime = animeList.filter((a) => a.status === "plan-to-watch");
-  const completedAnime = animeList.filter((a) => a.status === "completed");
-  const onHoldAnime = animeList.filter((a) => a.status === "on-hold");
-  const droppedAnime = animeList.filter((a) => a.status === "dropped");
+
+  if (isLoading) {
+    return (
+      <div className="dashboard-content">
+        <h2>Loading your library...</h2>
+      </div>
+    );
+  }
 
   const renderAnimeList = (list, title) => (
     <section className="anime-list-section">
@@ -225,14 +250,6 @@ const Dashboard = ({ user, animeList, isLoading }) => {
       )}
     </section>
   );
-
-  if (isLoading) {
-    return (
-      <div className="dashboard-content">
-        <h2>Loading your lists...</h2>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard-content">

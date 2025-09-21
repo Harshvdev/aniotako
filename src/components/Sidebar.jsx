@@ -4,19 +4,13 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import "./styles.css";
 
-// Accept setView as a prop
-const Sidebar = ({ setView }) => {
+const Sidebar = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
     } catch (error) {
       console.error("Error signing out: ", error);
     }
-  };
-
-  const handleNavClick = (e, viewName) => {
-    e.preventDefault(); // Prevent the default anchor tag behavior
-    setView(viewName);
   };
 
   return (
@@ -26,7 +20,7 @@ const Sidebar = ({ setView }) => {
         <nav>
           <ul className="nav-list">
             <li className="nav-item">
-              <a href="#" onClick={(e) => handleNavClick(e, "dashboard")}>
+              <a href="#" className="active">
                 <span>🏠</span> Home
               </a>
             </li>
@@ -40,16 +34,9 @@ const Sidebar = ({ setView }) => {
                 <span>🗓️</span> Seasonal
               </a>
             </li>
-          </ul>
-          <ul className="nav-list" style={{ marginTop: "24px" }}>
             <li className="nav-item">
               <a href="#">
                 <span>📚</span> My Library
-              </a>
-            </li>
-            <li className="nav-item">
-              <a href="#" onClick={(e) => handleNavClick(e, "add-anime")}>
-                <span>➕</span> Add Anime
               </a>
             </li>
           </ul>

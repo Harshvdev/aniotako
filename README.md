@@ -3,7 +3,7 @@
 
 ![Aniotako Preview](https://github.com/user-attachments/assets/772f052e-6b8c-4a42-a6e4-6fcf1760814a)
 
-**Live Demo:** [Link to your deployed site] *(You'll add this in the next phase!)*
+**Live Demo:** [Aniotako] *(https://projectaniotako.web.app/)*
 
 Aniotako is a sleek, modern web application designed for anime enthusiasts to track their watching journey. Users can search for any anime, add it to their personal lists, update their episode progress, and manage their library across multiple categories like "Watching," "Plan to Watch," and "Completed."
 
@@ -62,9 +62,8 @@ To get a local copy up and running, follow these simple steps.
 
 1.  **Clone the repo:**
     ```sh
-    git clone https://github.com/your-username/aniotako.git
+    git clone https://github.com/Harshvdev/aniotako.git
     ```
-    *(Replace `your-username` with your actual GitHub username)*
 
 2.  **Navigate to the project directory:**
     ```sh

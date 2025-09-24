@@ -1,6 +1,7 @@
 // src/components/Sidebar.jsx
 import React from "react";
 import { signOut } from "firebase/auth";
+import { NavLink } from "react-router-dom"; // <-- IMPORT NavLink
 import { auth } from "../firebase";
 import "./styles.css";
 
@@ -10,6 +11,12 @@ const Sidebar = ({ isOpen, onClose }) => {
       await signOut(auth);
     } catch (error) {
       console.error("Error signing out: ", error);
+    }
+  };
+
+  const closeSidebar = () => {
+    if (onClose) {
+      onClose();
     }
   };
 
@@ -23,24 +30,19 @@ const Sidebar = ({ isOpen, onClose }) => {
         <nav>
           <ul className="nav-list">
             <li className="nav-item">
-              <a href="#" className="active">
+              <NavLink to="/" className={({ isActive }) => isActive ? "active" : ""} onClick={closeSidebar} end>
                 <span>🏠</span> Home
-              </a>
+              </NavLink>
             </li>
             <li className="nav-item">
-              <a href="#">
+              <NavLink to="/trending" className={({ isActive }) => isActive ? "active" : ""} onClick={closeSidebar}>
                 <span>🔥</span> Trending
-              </a>
+              </NavLink>
             </li>
             <li className="nav-item">
-              <a href="#">
+              <NavLink to="/seasonal" className={({ isActive }) => isActive ? "active" : ""} onClick={closeSidebar}>
                 <span>🗓️</span> Seasonal
-              </a>
-            </li>
-            <li className="nav-item">
-              <a href="#">
-                <span>📚</span> My Library
-              </a>
+              </NavLink>
             </li>
           </ul>
         </nav>

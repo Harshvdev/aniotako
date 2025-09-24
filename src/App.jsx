@@ -8,7 +8,9 @@ import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import Dashboard from "./components/Dashboard";
 import AuthPage from "./components/AuthPage";
-import AnimeDetailPage from "./components/AnimeDetailPage"; // <-- IMPORT THE NEW PAGE
+import AnimeDetailPage from "./components/AnimeDetailPage";
+import TrendingPage from "./pages/TrendingPage"; // <-- NEW IMPORT
+import SeasonalPage from "./pages/SeasonalPage"; // <-- NEW IMPORT
 import "./App.css";
 import "./Responsive.css";
 
@@ -32,6 +34,8 @@ const AppContent = () => {
         <TopBar onMenuClick={() => setIsSidebarOpen(true)} />
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/trending" element={<TrendingPage />} />
+          <Route path="/seasonal" element={<SeasonalPage />} />
           <Route path="/anime/:id" element={<AnimeDetailPage />} />
         </Routes>
       </main>
@@ -44,7 +48,7 @@ function App() {
     <DataProvider>
       <BrowserRouter>
         <Toaster
-          position="bottom-center"
+          position="bottom-left"
           toastOptions={{
             style: {
               background: "#242424",

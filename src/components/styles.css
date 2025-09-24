@@ -554,3 +554,417 @@
     margin: 0 auto;
   }
 }
+
+/* === Anime Detail Page Action Styles === */
+.detail-actions {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.add-to-list-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--bg-primary);
+  background-color: var(--accent-cyan);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-to-list-btn:hover {
+  background-color: #00cccc;
+}
+
+.add-to-list-btn:disabled {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.detail-actions.in-list h4 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.status-select {
+  flex-grow: 1;
+  padding: 10px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--bg-primary);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.delete-button {
+  padding: 0 16px;
+  background-color: #a01c1c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.delete-button:hover {
+  background-color: #801616;
+}
+
+/* === IMPROVEMENT: TopBar Layout for Universal Hamburger === */
+.topbar {
+  gap: 24px; /* Increase gap to space out elements */
+}
+
+/* Hide the settings/notifications on smaller screens to make space */
+@media (max-width: 500px) {
+  .top-actions {
+    display: none;
+  }
+}
+
+/* Make email span optional on medium screens */
+@media (max-width: 900px) {
+    .user-profile-email {
+        display: none;
+    }
+}
+
+
+/* === IMPROVEMENT: Animated Options Menu on AnimeCard === */
+.options-dropdown {
+  /* Initial state: hidden and slightly smaller */
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+  transform-origin: top right;
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+  pointer-events: none; /* Prevent interaction when hidden */
+}
+
+/* When the menu should be open (triggered by JS) */
+.anime-card .options-dropdown {
+  /* This is a bit of a trick. Since we manage open state in JS,
+     we just ensure that when it *is* in the DOM, it's visible.
+     The parent component re-renders to show it. */
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+
+/* === NEW: Search Results Dropdown with Options === */
+.search-result-item-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.search-result-item {
+  position: relative; /* For dropdown positioning */
+  transition: background-color 0.2s ease;
+}
+
+.search-result-item-link:hover .search-result-item {
+  background-color: var(--bg-secondary);
+}
+
+.search-result-actions {
+  position: relative;
+  margin-left: auto; /* Push to the far right */
+}
+
+.search-options-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.search-options-btn:hover {
+  background-color: var(--accent-cyan);
+  color: var(--bg-primary);
+}
+
+.search-options-dropdown {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--bg-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 40;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-options-dropdown button {
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--bg-primary);
+}
+.search-options-dropdown button:last-child {
+  border-bottom: none;
+}
+
+.search-options-dropdown button:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.search-options-dropdown button:disabled {
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* === IMPROVEMENT: More Compact Anime Detail Page Layout === */
+.detail-content {
+  grid-template-columns: 250px 1fr; /* Make image column smaller */
+  gap: 24px; /* Reduce gap between columns */
+}
+
+.detail-left img {
+  width: 100%;
+  border-radius: 8px; /* Slightly smaller radius */
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.detail-page-header h1 {
+  font-size: 24px; /* Make title slightly smaller */
+}
+
+.synopsis {
+  line-height: 1.5; /* Tighter line spacing */
+  font-size: 14px; /* Smaller font for synopsis */
+}
+
+/* === FIX: Detail Page Layout Overhaul === */
+
+/* Use Flexbox for a more robust responsive layout */
+.detail-content {
+  display: flex;
+  flex-direction: row; /* Side-by-side on desktop */
+  gap: 24px;
+}
+
+.detail-left {
+  flex: 0 0 250px; /* Desktop: Don't grow, don't shrink, fixed width */
+}
+
+.detail-right {
+  flex: 1 1 auto; /* Desktop: Grow and shrink as needed */
+  min-width: 0; /* Prevents flexbox overflow issues */
+}
+
+/* The actions component now needs margin since it's in the right column */
+.detail-actions {
+  margin-top: 0; /* No margin on desktop */
+  margin-bottom: 20px; /* Space between actions and meta info */
+}
+
+
+/* --- MOBILE OVERRIDES (The real fix) --- */
+@media (max-width: 768px) {
+  .detail-content {
+    flex-direction: column; /* On mobile, stack the columns */
+  }
+
+  .detail-left {
+    flex-basis: auto; /* Let it be its natural size */
+    width: 70%;     /* Make the poster smaller than the screen width */
+    max-width: 250px; /* But not bigger than its desktop size */
+    margin: 0 auto;   /* Center the poster horizontally */
+  }
+  
+  .detail-actions {
+      margin-top: 20px; /* Add space above the actions on mobile */
+  }
+}
+
+/* === FIX: Detail Page Layout and Spacing Overhaul === */
+
+/* Remove the old mobile layout fix, as it's now redundant */
+@media (max-width: 768px) {
+  .detail-actions {
+      margin-top: 20px;
+  }
+}
+
+/* New, more robust layout styles for the detail content */
+.detail-content {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  margin-bottom: 32px; /* Add space between this block and the synopsis */
+}
+
+.detail-left {
+  flex: 0 0 250px;
+}
+
+.detail-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column; /* Stack the content vertically */
+}
+
+/* Push the user's library actions to the bottom of the column */
+.detail-actions {
+  margin-top: auto; /* This is the magic property! */
+  margin-bottom: 0;
+}
+
+/* Ensure a nice gap between the metadata and genres */
+.detail-meta {
+  margin-bottom: 16px;
+}
+
+/* Create the new full-width synopsis section */
+.synopsis-section h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+/* Mobile overrides for the new structure */
+@media (max-width: 768px) {
+  .detail-content {
+    flex-direction: column;
+    margin-bottom: 24px;
+  }
+  .detail-left {
+    width: 70%;
+    max-width: 250px;
+    margin: 0 auto;
+  }
+  .detail-actions {
+    margin-top: 20px; /* Re-add margin for mobile stacking */
+  }
+}
+
+/* === NEW & IMPROVED Anime Detail Page Layout === */
+.detail-content {
+  display: flex;
+  flex-direction: row; /* Side-by-side on desktop */
+  gap: 32px;
+}
+
+.detail-left {
+  flex: 0 0 250px; /* Fixed width for the left column */
+  display: flex;
+  flex-direction: column; /* Stack image and genres vertically */
+}
+
+.detail-right {
+  flex: 1 1 auto; /* Allow the right column to take up remaining space */
+  min-width: 0; /* Prevent flexbox overflow */
+  display: flex;
+  flex-direction: column; /* Stack meta, synopsis, and actions vertically */
+}
+
+.detail-genres {
+  margin-top: 16px; /* Space between image and genres */
+}
+
+.detail-right h2 {
+  font-size: 20px;
+  margin-top: 0; /* No top margin, let meta handle spacing */
+  margin-bottom: 8px;
+}
+
+.detail-actions {
+  margin-top: 24px; /* Space between synopsis and actions */
+}
+
+/* --- Mobile View for the New Layout --- */
+@media (max-width: 768px) {
+  .detail-content {
+    flex-direction: column; /* Stack columns on mobile */
+    gap: 24px;
+  }
+  .detail-left {
+    width: 70%;
+    max-width: 250px;
+    margin: 0 auto;
+    flex-basis: auto;
+  }
+}
+
+/* === Discovery Page Styles === */
+.discovery-page {
+  padding: 24px;
+}
+
+.discovery-page h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 24px;
+}
+
+
+/* === Reusable Anime Card - Discovery Variant Styles === */
+.discovery-add-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--bg-primary);
+  border-radius: 6px;
+  font-weight: 500;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.discovery-add-btn:hover {
+  background-color: var(--accent-cyan);
+  color: var(--bg-primary);
+  border-color: var(--accent-cyan);
+}
+
+.discovery-add-btn:disabled {
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}

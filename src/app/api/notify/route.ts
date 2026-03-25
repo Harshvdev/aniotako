@@ -2,88 +2,135 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webPush from "web-push";
 
-// Configure web-push with VAPID details
+// Configure web-push with your VAPID details
 webPush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
+  "mailto:admin@aniotako.com",
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
 
 export async function GET(req: Request) {
-  // Optional: Secure this endpoint so only Vercel Cron can call it
-  const authHeader = req.headers.get("Authorization");
+  // 1. Verify Authorization header against Vercel Cron Secret
+  const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    // 1. Fetch today's schedule from Jikan
-    const jikanRes = await fetch("https://api.jikan.moe/v4/schedules");
-    const { data: airingAnime } = await jikanRes.json();
+    // 2. Determine today's day name in lowercase
+    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const today = days[new Date().getUTCDay()];
+
+    // 3. Fetch today's schedule from Jikan
+    const jikanRes = await fetch(`https://api.jikan.moe/v4/schedules?filter=${today}`);
+    if (!jikanRes.ok) throw new Error("Failed to fetch Jikan schedule");
     
-    if (!airingAnime || airingAnime.length === 0) {
-      return NextResponse.json({ message: "No anime airing today." });
+    const { data: airingData } = await jikanRes.json();
+    if (!airingData || airingData.length === 0) {
+      return NextResponse.json({ message: "No anime airing today", notified_users: 0, notifications_sent: 0, failed: 0 });
     }
+    
+    // Extract the array of mal_id values
+    const airingMalIds = airingData.map((anime: any) => anime.mal_id);
 
-    const airingMalIds = airingAnime.map((a: any) => a.mal_id);
-
-    // Initialize Supabase Admin Client (Bypasses RLS)
+    // 4. Init Supabase Admin (Bypasses RLS)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY! // Requires service role key!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 2. Find all entries where status is "watching" and the anime is airing today
-    const { data: watchingEntries, error: entriesError } = await supabaseAdmin
+    // Query watchlist_entries for 'watching' status matching airing mal_ids
+    const { data: watchlist, error: wlError } = await supabaseAdmin
       .from("watchlist_entries")
-      .select("user_id, series_title, series_animedb_id")
-      .eq("my_status", "watching")
-      .in("series_animedb_id", airingMalIds);
+      .select("user_id, mal_id, title")
+      .eq("status", "watching")
+      .in("mal_id", airingMalIds);
 
-    if (entriesError) throw entriesError;
-    if (!watchingEntries || watchingEntries.length === 0) {
-      return NextResponse.json({ message: "No users watching today's anime." });
+    if (wlError) throw wlError;
+    if (!watchlist || watchlist.length === 0) {
+      return NextResponse.json({ message: "No users watching today's airing anime", notified_users: 0, notifications_sent: 0, failed: 0 });
     }
 
-    // Extract unique user IDs to fetch their push subscriptions
-    const userIds = [...new Set(watchingEntries.map(e => e.user_id))];
+    // 5. Group by user_id
+    const userIds = [...new Set(watchlist.map((entry) => entry.user_id))];
 
-    // 3. Get push subscriptions for these users
-    const { data: subscriptions, error: subsError } = await supabaseAdmin
+    // 6. Fetch push_subscriptions for these users
+    const { data: subscriptions, error: subError } = await supabaseAdmin
       .from("push_subscriptions")
-      .select("*")
+      .select("id, user_id, endpoint, p256dh, auth_key")
       .in("user_id", userIds);
 
-    if (subsError) throw subsError;
+    if (subError) throw subError;
+    if (!subscriptions || subscriptions.length === 0) {
+      return NextResponse.json({ message: "No push subscriptions found for target users", notified_users: 0, notifications_sent: 0, failed: 0 });
+    }
 
-    // 4. Send Web Push Notifications
-    const notificationPromises = watchingEntries.map(entry => {
-      // Find all subscriptions for the user watching this specific anime
-      const userSubs = subscriptions?.filter(sub => sub.user_id === entry.user_id) || [];
+    // Tracking metrics
+    let notificationsSent = 0;
+    let failed = 0;
+    const endpointsToDelete: string[] = [];
+    const notifiedUsers = new Set<string>();
+
+    // 7. Map out all push notification promises
+    const pushPromises = [];
+
+    for (const entry of watchlist) {
+      // Find all devices/subscriptions belonging to the user tracking this anime
+      const userSubs = subscriptions.filter(sub => sub.user_id === entry.user_id);
       
-      const payload = JSON.stringify({
-        title: "New Episode Airing!",
-        body: `A new episode of ${entry.series_title} airs today.`,
-        url: `/watchlist`, // Clicking notification will route here
-      });
+      if (userSubs.length > 0) {
+        notifiedUsers.add(entry.user_id);
+      }
 
-      // Send to all devices the user has subscribed with
-      return userSubs.map(sub => 
-        webPush.sendNotification(
-          { endpoint: sub.endpoint, keys: sub.keys },
+      for (const sub of userSubs) {
+        const payload = JSON.stringify({
+          title: `New episode: ${entry.title}`,
+          body: "A new episode is out now on Aniotako",
+          url: "/watchlist" // Optional: directs users to the watchlist when they click the notification
+        });
+
+        // 8. Execute push and catch 410 errors
+        const pushPromise = webPush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth_key }
+          },
           payload
-        ).catch(err => {
-          console.error("Failed to send push to endpoint", sub.endpoint, err);
-          // Optional: Delete dead subscriptions from DB if err.statusCode === 410 (Gone)
-        })
-      );
-    }).flat();
+        ).then(() => {
+          notificationsSent++;
+        }).catch((err) => {
+          failed++;
+          // 410 Gone means the user revoked permission or the subscription expired
+          if (err.statusCode === 410) {
+            endpointsToDelete.push(sub.endpoint);
+          }
+        });
 
-    await Promise.all(notificationPromises);
+        pushPromises.push(pushPromise);
+      }
+    }
 
-    return NextResponse.json({ success: true, notificationsSent: notificationPromises.length });
+    // Wait for all pushes to complete
+    await Promise.allSettled(pushPromises);
+
+    // Clean up expired subscriptions from the database
+    if (endpointsToDelete.length > 0) {
+      await supabaseAdmin
+        .from("push_subscriptions")
+        .delete()
+        .in("endpoint", endpointsToDelete);
+    }
+
+    // 9. Return JSON results
+    return NextResponse.json({
+      notified_users: notifiedUsers.size,
+      notifications_sent: notificationsSent,
+      failed: failed,
+      deleted_expired_subs: endpointsToDelete.length
+    });
+
   } catch (error: any) {
-    console.error("Cron notification error:", error);
+    console.error("Cron Notification Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

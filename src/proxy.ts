@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // 1. Create an initial response object that we can mutate
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  // 2. Initialize the Supabase client specifically for middleware
+  // 2. Initialize the Supabase client specifically for the proxy
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -31,7 +31,6 @@ export async function middleware(request: NextRequest) {
   );
 
   // 3. Fetch the user to trigger a session refresh if needed
-  // Always use getUser() instead of getSession() for secure server-side checks
   const { data: { user } } = await supabase.auth.getUser();
 
   const url = request.nextUrl;
@@ -53,7 +52,6 @@ export async function middleware(request: NextRequest) {
     if (isProtectedPath || (isApiRoute && !isCronRoute)) {
       const redirectUrl = url.clone();
       redirectUrl.pathname = "/login";
-      // Optional: Save the attempted URL to redirect them back after logging in
       redirectUrl.searchParams.set("next", path); 
       return NextResponse.redirect(redirectUrl);
     }
@@ -70,16 +68,9 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse;
 }
 
-// 6. Matcher Config: Ignore static files, images, and favicon to save processing time
+// 6. Matcher Config: Ignore static files, images, and favicon
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

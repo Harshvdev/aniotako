@@ -1,57 +1,46 @@
 import { NextResponse } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
   try {
-    const subscription = await req.json();
-
-    const cookieStore = await cookies(); 
+    const supabase = await createClient();
     
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options);
-              });
-            } catch (error) {
-              // This catch block is intentionally left empty.
-              // It prevents errors if setAll is called from a Server Component 
-              // (which can't write cookies), though Route Handlers can.
-            }
-          },
-        },
-      }
-    );
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // 1. Verify User
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Upsert subscription (using endpoint as the unique identifier)
-    const { error: dbError } = await supabase
+    // 2. Parse Subscription Object
+    const subscription = await req.json();
+    const { endpoint, keys } = subscription;
+
+    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+      return NextResponse.json({ error: "Invalid subscription payload" }, { status: 400 });
+    }
+
+    // 3. Upsert into Supabase
+    // Uses the endpoint as the unique identifier so users don't get duplicate rows 
+    // if they re-subscribe on the same device.
+    const { error } = await supabase
       .from("push_subscriptions")
       .upsert({
         user_id: user.id,
-        endpoint: subscription.endpoint,
-        p256dh: subscription.keys.p256dh,
-        auth_key: subscription.keys.auth,
-      }, { onConflict: 'endpoint' });
+        endpoint: endpoint,
+        p256dh: keys.p256dh,
+        auth_key: keys.auth,
+      }, {
+        onConflict: "endpoint"
+      });
 
-    if (dbError) throw dbError;
+    if (error) {
+      console.error("Failed to save subscription:", error);
+      throw new Error("Database error while saving subscription.");
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Subscription error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Subscription API error:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

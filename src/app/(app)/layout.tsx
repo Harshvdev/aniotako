@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/components/SignOutButton";
+import NotificationToggle from "@/components/NotficationToggle";
 
 export default async function AppLayout({
   children,
@@ -50,6 +51,7 @@ export default async function AppLayout({
 
           {/* Right: User Menu */}
           <div className="flex justify-end w-1/3">
+            <NotificationToggle />
             <div className="group relative">
               <button className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors">
                 <span className="text-sm text-zinc-400 truncate max-w-[120px] md:max-w-xs hidden sm:block">

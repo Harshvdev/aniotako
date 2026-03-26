@@ -55,7 +55,9 @@ export default function NotificationToggle() {
       if (!vapidPublicKey) {
         throw new Error("Missing VAPID public key in environment variables.");
       }
-
+      console.log("RAW KEY:", vapidPublicKey);
+      console.log("KEY LENGTH:", vapidPublicKey.length);
+      // A valid VAPID public key should be exactly 87 characters long!
       const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,

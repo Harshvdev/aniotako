@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import AddAnimeSearch from "@/components/AddAnimeSearch";
@@ -36,12 +37,29 @@ const TYPES = ["TV", "Movie", "OVA", "ONA", "Special"];
 
 export default function WatchlistClient({ initialWatchlist }: Props) {
   // --- State ---
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [minScore, setMinScore] = useState<number>(0);
   const [sortBy, setSortBy] = useState("recent");
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
+
+  const handleRemove = async (id: string) => {
+    try {
+      const res = await fetch(`/api/watchlist/delete?id=${id}`, {
+        method: "DELETE",
+      });
+      
+      if (!res.ok) throw new Error("Failed to delete");
+      
+      // Tell Next.js to quietly refresh the list from the server
+      router.refresh(); 
+    } catch (error) {
+      console.error(error);
+      alert("Failed to remove anime. Please try again.");
+    }
+  };
   // --- Client-Side Filtering & Sorting (Instant!) ---
   const filteredAndSorted = useMemo(() => {
     let result = [...initialWatchlist];
@@ -215,7 +233,11 @@ export default function WatchlistClient({ initialWatchlist }: Props) {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
               {filteredAndSorted.map((anime) => (
-                <AnimeCard key={anime.id} entry={anime} />
+                <AnimeCard
+                  key={anime.id}
+                  entry={anime}
+                  onRemove={handleRemove}
+                />
               ))}
               
             </div>

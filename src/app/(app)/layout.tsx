@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/components/SignOutButton";
 import NotificationToggle from "@/components/NotficationToggle";
+import GlobalEnrichmentTracker from "@/components/GlobalEnrichmentTracker";
 
 export default async function AppLayout({
   children,
@@ -81,6 +82,9 @@ export default async function AppLayout({
 
       {/* Page Content injected here */}
       {children}
+
+      {/* Persistent Background Tasks */}
+      <GlobalEnrichmentTracker />
     </div>
   );
 }

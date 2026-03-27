@@ -12,11 +12,16 @@ export default function GlobalEnrichmentTracker() {
   const router = useRouter();
 
   const checkStatusAndStart = async () => {
+    // 1. LOCK IMMEDIATELY. Do not wait for fetch.
     if (isProcessingRef.current) return;
+    isProcessingRef.current = true; 
 
     try {
       const res = await fetch("/api/enrich");
-      if (!res.ok) return;
+      if (!res.ok) {
+        isProcessingRef.current = false;
+        return;
+      }
       
       const { remaining } = await res.json();
       
@@ -24,18 +29,21 @@ export default function GlobalEnrichmentTracker() {
         setStats(prev => ({ 
           ...prev, 
           remaining, 
-          // Keep the highest total so the progress bar doesn't jump backwards
           total: prev.total > remaining ? prev.total : remaining 
         }));
+        // startProcessing takes over the lock from here
         startProcessing(remaining);
+      } else {
+        // Unlock if there is nothing to do
+        isProcessingRef.current = false; 
       }
     } catch (err) {
       console.error("Failed to check enrichment status", err);
+      isProcessingRef.current = false; 
     }
   };
 
   const startProcessing = async (initialRemaining: number) => {
-    isProcessingRef.current = true;
     setIsActive(true);
     setIsComplete(false);
 
@@ -46,6 +54,13 @@ export default function GlobalEnrichmentTracker() {
         const res = await fetch("/api/enrich", { method: "POST" });
         if (!res.ok) break; 
         
+        // 2. SHIELD AGAINST HTML ERRORS (Fixes the <!DOCTYPE crash)
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          console.error("Server returned non-JSON response. Pausing tracker.");
+          break;
+        }
+
         const data = await res.json();
         currentRemaining = data.remaining;
         
@@ -60,10 +75,8 @@ export default function GlobalEnrichmentTracker() {
           setIsActive(false);
           setIsComplete(true);
           
-          // Refresh the router so the Watchlist grid updates with the new images
           router.refresh();
           
-          // Hide the success popup after 4 seconds
           setTimeout(() => {
             setIsComplete(false);
             setStats({ done: 0, total: 0, remaining: 0 });
@@ -75,11 +88,9 @@ export default function GlobalEnrichmentTracker() {
         break;
       }
     }
-    isProcessingRef.current = false;
+    isProcessingRef.current = false; // Always release the lock when done
   };
 
-  // 1. Check on mount (handles page refreshes)
-  // 2. Listen for custom event (handles in-app imports)
   useEffect(() => {
     checkStatusAndStart();
     
@@ -118,7 +129,7 @@ export default function GlobalEnrichmentTracker() {
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             <p className="text-xs font-bold tracking-wide">Artwork sync complete!</p>
           </div>
-        ) : null}
+        ): null}
       </div>
     </div>
   );

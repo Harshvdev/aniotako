@@ -1,46 +1,59 @@
 import { NextResponse } from "next/server";
 
-// Module-level variable to track the last request time
-let lastRequestTime = 0;
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q");
-
-  if (!q) {
-    return NextResponse.json({ error: "Search term is required" }, { status: 400 });
-  }
-
-  // 1. Throttle logic: Ensure at least 500ms between requests
-  const now = Date.now();
-  const timeSinceLast = now - lastRequestTime;
-  
-  if (timeSinceLast < 500) {
-    // Wait for the remainder of the 500ms window
-    await new Promise((resolve) => setTimeout(resolve, 500 - timeSinceLast));
-  }
-  
-  // Update the timestamp to the current time *after* any waiting
-  lastRequestTime = Date.now();
-
+export async function GET(req: Request) {
   try {
-    // 2. Fetch from Jikan
-    const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&limit=10&sfw=true`);
+    const { searchParams } = new URL(req.url);
     
-    if (res.status === 429) {
-      return NextResponse.json({ error: "Rate limited by Jikan API" }, { status: 429 });
+    // Base Jikan URL
+    const jikanUrl = new URL("https://api.jikan.moe/v4/anime");
+    
+    // We only want 10 results max as requested
+    jikanUrl.searchParams.set("limit", "10");
+    jikanUrl.searchParams.set("sfw", "true"); // Safe for work (optional, but recommended)
+
+    // Append all allowed parameters if they exist
+    const q = searchParams.get("q");
+    if (q) jikanUrl.searchParams.set("q", q);
+
+    const type = searchParams.get("type");
+    if (type && type !== "All") jikanUrl.searchParams.set("type", type.toLowerCase());
+
+    const status = searchParams.get("status");
+    if (status && status !== "All") jikanUrl.searchParams.set("status", status.toLowerCase());
+
+    const rating = searchParams.get("rating");
+    if (rating && rating !== "All") {
+      // Map frontend values to Jikan values
+      const ratingMap: Record<string, string> = {
+        "G": "g", "PG": "pg", "PG-13": "pg13", "R-17+": "r17", "R+": "r", "Rx": "rx"
+      };
+      jikanUrl.searchParams.set("rating", ratingMap[rating] || "g");
     }
 
-    if (!res.ok) {
-      throw new Error(`Jikan API responded with status: ${res.status}`);
+    const min_score = searchParams.get("min_score");
+    if (min_score) jikanUrl.searchParams.set("min_score", min_score);
+
+    const max_score = searchParams.get("max_score");
+    if (max_score) jikanUrl.searchParams.set("max_score", max_score);
+
+    const genres = searchParams.get("genres");
+    if (genres) jikanUrl.searchParams.set("genres", genres); // Jikan expects comma-separated IDs
+
+    const order_by = searchParams.get("order_by");
+    if (order_by && order_by !== "All") {
+      jikanUrl.searchParams.set("order_by", order_by.toLowerCase());
+      jikanUrl.searchParams.set("sort", "desc"); // Always sort desc for score/popularity
     }
 
-    const json = await res.json();
+    const res = await fetch(jikanUrl.toString());
+    if (!res.ok) throw new Error("Failed to fetch from Jikan");
+
+    const data = await res.json();
     
-    // 3. Return only the data array
-    return NextResponse.json(json.data || []);
+    // Return just the array of anime to keep the frontend clean
+    return NextResponse.json(data.data || []);
   } catch (error: any) {
-    console.error("Jikan search proxy error:", error);
-    return NextResponse.json({ error: "Failed to fetch search results" }, { status: 500 });
+    console.error("Jikan Search Proxy Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

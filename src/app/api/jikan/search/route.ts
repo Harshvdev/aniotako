@@ -1,17 +1,48 @@
 import { NextResponse } from "next/server";
+import https from "https";
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Custom fetch wrapper that forces IPv4 resolution to prevent ENETUNREACH
+const fetchIPv4 = (url: string, timeoutMs: number = 5000): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { family: 4 }, (res) => { // family: 4 forces IPv4
+      if (res.statusCode === 429) {
+        return reject({ status: 429, message: "Rate Limited" });
+      }
+      if (res.statusCode !== 200) {
+        return reject({ status: res.statusCode, message: `HTTP Error ${res.statusCode}` });
+      }
+
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject({ status: 500, message: "Failed to parse JSON response" });
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    
+    // Hard timeout implementation
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject({ name: 'AbortError', message: 'Request timed out' });
+    });
+  });
+};
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    
-    // Base Jikan URL
     const jikanUrl = new URL("https://api.jikan.moe/v4/anime");
     
-    // We only want 10 results max as requested
     jikanUrl.searchParams.set("limit", "10");
-    jikanUrl.searchParams.set("sfw", "true"); // Safe for work (optional, but recommended)
+    jikanUrl.searchParams.set("sfw", "true");
 
-    // Append all allowed parameters if they exist
     const q = searchParams.get("q");
     if (q) jikanUrl.searchParams.set("q", q);
 
@@ -23,7 +54,6 @@ export async function GET(req: Request) {
 
     const rating = searchParams.get("rating");
     if (rating && rating !== "All") {
-      // Map frontend values to Jikan values
       const ratingMap: Record<string, string> = {
         "G": "g", "PG": "pg", "PG-13": "pg13", "R-17+": "r17", "R+": "r", "Rx": "rx"
       };
@@ -37,23 +67,61 @@ export async function GET(req: Request) {
     if (max_score) jikanUrl.searchParams.set("max_score", max_score);
 
     const genres = searchParams.get("genres");
-    if (genres) jikanUrl.searchParams.set("genres", genres); // Jikan expects comma-separated IDs
+    if (genres) jikanUrl.searchParams.set("genres", genres);
 
     const order_by = searchParams.get("order_by");
     if (order_by && order_by !== "All") {
       jikanUrl.searchParams.set("order_by", order_by.toLowerCase());
-      jikanUrl.searchParams.set("sort", "desc"); // Always sort desc for score/popularity
+      jikanUrl.searchParams.set("sort", "desc");
     }
 
-    const res = await fetch(jikanUrl.toString());
-    if (!res.ok) throw new Error("Failed to fetch from Jikan");
+    const MAX_RETRIES = 3;
+    let lastError: any;
 
-    const data = await res.json();
-    
-    // Return just the array of anime to keep the frontend clean
-    return NextResponse.json(data.data || []);
+    console.log(`\n=========================================`);
+    console.log(`[Search API] TARGET URL: ${jikanUrl.toString()}`);
+    console.log(`=========================================`);
+
+    for (let i = 0; i < MAX_RETRIES; i++) {
+      const attemptStart = Date.now();
+      try {
+        console.log(`[Search API] Attempt ${i + 1} fetching via IPv4...`);
+        
+        // Using our custom IPv4 fetcher
+        const data = await fetchIPv4(jikanUrl.toString(), 5000);
+        
+        console.log(`[Search API] Attempt ${i + 1} SUCCESS (Took ${Date.now() - attemptStart}ms)`);
+        
+        // Cache the response locally for 1 hour using Next.js caching strategy
+        return NextResponse.json(data.data || [], {
+          headers: {
+            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=59',
+          },
+        });
+
+      } catch (err: any) {
+        const duration = Date.now() - attemptStart;
+        lastError = err;
+
+        console.error(`\n[Search API] ❌ Attempt ${i + 1} FAILED after ${duration}ms`);
+        console.error(`   -> Error:`, err.message || err);
+        console.error(`-----------------------------------------\n`);
+
+        if (err.status === 429) {
+          console.warn(`[Search API] Rate limited. Retrying...`);
+          await delay(1000 * (i + 1));
+          continue;
+        }
+
+        if (i === MAX_RETRIES - 1) break;
+        await delay(800 * (i + 1));
+      }
+    }
+
+    throw lastError;
+
   } catch (error: any) {
-    console.error("Jikan Search Proxy Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[Search API] Final Crash Reached.", error);
+    return NextResponse.json({ error: "Failed to connect to anime database." }, { status: 504 });
   }
 }

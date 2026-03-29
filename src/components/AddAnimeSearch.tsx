@@ -61,13 +61,16 @@ export default function AddAnimeSearch() {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // --- 1. Debounced Search Effect (Combines Query + Filters) ---
+  // --- 1. Debounced Search Effect (Combines Query + Filters) ---
   useEffect(() => {
-    // Only search if there's a query OR if filters are heavily modified
     if (!query.trim() && filters.genres.length === 0 && filters.order_by === "All") {
       setResults([]);
       setShowDropdown(false);
       return;
     }
+
+    // Create an AbortController to cancel obsolete requests
+    const controller = new AbortController();
 
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
@@ -86,20 +89,33 @@ export default function AddAnimeSearch() {
           params.append("max_score", max);
         }
 
-        const res = await fetch(`/api/jikan/search?${params.toString()}`);
+        // Pass the abort signal to the fetch request
+        const res = await fetch(`/api/jikan/search?${params.toString()}`, {
+          signal: controller.signal
+        });
+        
         if (res.ok) {
           const data = await res.json();
           setResults(data);
           setShowDropdown(true);
+        } else if (res.status === 429) {
+           setToast({ message: "Searching too fast! Please wait a moment.", type: "error" });
         }
-      } catch (err) {
-        console.error("Search failed", err);
+      } catch (err: any) {
+        // Only log errors if it wasn't an intentional abort
+        if (err.name !== "AbortError") {
+          console.error("Search failed", err);
+        }
       } finally {
         setIsSearching(false);
       }
-    }, 500); // 500ms debounce
+    }, 800); // Increased debounce to 800ms to be gentle on the API
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      // Cancel the fetch request if the user types another letter before it finishes
+      controller.abort(); 
+    };
   }, [query, filters]);
 
   // --- 2. Click Outside to Close ---

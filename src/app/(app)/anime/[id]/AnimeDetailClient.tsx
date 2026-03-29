@@ -146,10 +146,18 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
             <TrackingCard entry={entry} isUpdating={isUpdating} onAdd={handleAdd} onUpdate={handleUpdate} episodes={anime.episodes} />
           </div>
 
-          {/* Genres */}
+          {/* Genres, Themes & Demographics */}
           <div className="flex flex-wrap gap-2 mt-6">
-            {anime.genres?.map((g: any) => (
-              <span key={g.mal_id} className="px-3 py-1 text-xs bg-zinc-800 text-zinc-300 rounded-full font-medium hover:bg-fuchsia-600 hover:text-white cursor-pointer transition-colors">
+            {[
+              ...(anime.genres || []),
+              ...(anime.explicit_genres || []),
+              ...(anime.themes || []),
+              ...(anime.demographics || [])
+            ].map((g: any, idx: number) => (
+              <span 
+                key={`${g.mal_id}-${idx}`} 
+                className="px-3 py-1 text-xs bg-zinc-800 text-zinc-300 rounded-full font-medium hover:bg-fuchsia-600 hover:text-white cursor-pointer transition-colors border border-zinc-700/50"
+              >
                 {g.name}
               </span>
             ))}
@@ -250,7 +258,7 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
                       {ep.title_japanese && <p className="text-xs text-zinc-500 truncate">{ep.title_japanese}</p>}
                     </div>
                     <div className="shrink-0 text-xs text-zinc-500 font-medium">
-                      {ep.aired ? new Date(ep.aired).toLocaleDateString() : "TBA"}
+                      {ep.aired ? new Date(ep.aired).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : "TBA"}
                     </div>
                   </div>
                 )) : <p className="text-zinc-500 text-sm">No episodes listed yet.</p>}
@@ -292,7 +300,9 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-xl">
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/80">
         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Your List</span>
-        <span className="text-[10px] text-zinc-500 font-medium">Added {new Date(entry.created_at).toLocaleDateString()}</span>
+        <span className="text-[10px] text-zinc-500 font-medium">
+          Added {new Date(entry.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+        </span>
       </div>
 
       <div className="space-y-4">

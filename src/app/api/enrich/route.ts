@@ -1,11 +1,39 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import https from "https";
 
-// Force Next.js to NEVER cache this route
 export const dynamic = 'force-dynamic';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Custom fetch wrapper that forces IPv4 resolution to prevent ENETUNREACH timeouts
+const fetchIPv4 = (url: string, timeoutMs: number = 6000): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { family: 4 }, (res) => {
+      if (res.statusCode === 429) return reject({ status: 429, message: "Rate Limited" });
+      if (res.statusCode && res.statusCode !== 200) {
+        return reject({ status: res.statusCode, message: `HTTP Error ${res.statusCode}` });
+      }
+
+      let rawData = '';
+      res.on('data', (chunk) => { rawData += chunk; });
+      res.on('end', () => {
+        try { 
+          resolve(JSON.parse(rawData)); 
+        } catch (e) { 
+          reject({ status: 500, message: "JSON Parse Error" }); 
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    req.setTimeout(timeoutMs, () => { 
+      req.destroy(); 
+      reject({ name: 'AbortError', message: 'Timeout' }); 
+    });
+  });
+};
 
 export async function POST(req: Request) {
   try {
@@ -49,41 +77,26 @@ export async function POST(req: Request) {
       await delay(1100); 
 
       try {
-        const res = await fetch(`https://api.jikan.moe/v4/anime/${entry.mal_id}`);
+        // Use our bulletproof IPv4 fetcher
+        const jsonResponse = await fetchIPv4(`https://api.jikan.moe/v4/anime/${entry.mal_id}`);
+        const data = jsonResponse.data;
         
-        if (res.status === 429) {
-          console.warn(`[ENRICH] Rate Limit Hit! Breaking batch.`);
-          break; 
-        }
-
-        if (!res.ok) {
-          const { error: placeholderErr } = await supabaseAdmin.from("anime_metadata").upsert({
-            mal_id: entry.mal_id, title: entry.title, type: "Unknown", cached_at: new Date().toISOString()
-          });
-          if (placeholderErr) throw new Error(`Placeholder DB Error: ${placeholderErr.message}`);
-          enrichedCount++;
-          continue;
-        }
-
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          const { error: htmlErr } = await supabaseAdmin.from("anime_metadata").upsert({
-            mal_id: entry.mal_id, title: entry.title, type: "Unknown", cached_at: new Date().toISOString()
-          });
-          if (htmlErr) throw new Error(`HTML Fallback DB Error: ${htmlErr.message}`);
-          enrichedCount++; 
-          continue;
-        }
-
-        const { data } = await res.json();
         if (!data) continue;
 
         const poster_url = data.images?.jpg?.large_image_url || entry.poster_url;
 
+        // Combine all tag types into one deduplicated array
+        const combinedGenres = Array.from(new Set([
+          ...(data.genres || []),
+          ...(data.explicit_genres || []),
+          ...(data.themes || []),
+          ...(data.demographics || [])
+        ].map((g: any) => g.name)));
+
         const metadata = {
           mal_id: data.mal_id,
           title: data.title || entry.title,
-          genres: data.genres?.map((g: any) => g.name) || [],
+          genres: combinedGenres,
           type: data.type || "Unknown",
           season: data.season || null,
           airing_status: data.status || null,
@@ -93,8 +106,10 @@ export async function POST(req: Request) {
           synopsis: data.synopsis || null,
           poster_url: poster_url,
           cached_at: new Date().toISOString(),
+          jikan_raw: data
         };
 
+        // 1. Update Watchlist Entry Poster
         if (entry.poster_url !== poster_url) {
           const { error: updateErr } = await supabase
             .from("watchlist_entries")
@@ -104,15 +119,29 @@ export async function POST(req: Request) {
           if (updateErr) throw new Error(`Watchlist Update Error: ${updateErr.message}`);
         }
 
+        // 2. Upsert into Metadata Cache
         const { error: upsertErr } = await supabaseAdmin.from("anime_metadata").upsert(metadata);
         if (upsertErr) throw new Error(`Metadata Upsert Error: ${upsertErr.message}`);
 
         console.log(`[ENRICH] Successfully saved ${entry.mal_id}`);
         enrichedCount++;
 
-      } catch (err) {
-        // THIS IS THE CRITICAL LOG: It will now print the EXACT database failure reason!
-        console.error(`[ENRICH] Hard Crash on ${entry.mal_id}:`, err);
+      } catch (err: any) {
+        console.error(`[ENRICH] Hard Crash on ${entry.mal_id}:`, err.message || err);
+
+        // Handle Rate Limits Safely
+        if (err.status === 429) {
+          console.warn(`[ENRICH] Rate Limit Hit! Breaking batch.`);
+          break;
+        }
+
+        // If it's a hard 404 or persistent API failure, mark as unknown so it stops looping
+        if (err.status === 404 || err.status >= 500) {
+           await supabaseAdmin.from("anime_metadata").upsert({
+            mal_id: entry.mal_id, title: entry.title, type: "Unknown", cached_at: new Date().toISOString()
+          });
+          enrichedCount++;
+        }
       }
     }
 

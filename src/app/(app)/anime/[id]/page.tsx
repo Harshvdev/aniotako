@@ -55,10 +55,19 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
       jikanData = response.data;
 
       if (jikanData) {
+
+        // Combine all tag types into one deduplicated array
+        const combinedGenres = Array.from(new Set([
+          ...(jikanData.genres || []),
+          ...(jikanData.explicit_genres || []),
+          ...(jikanData.themes || []),
+          ...(jikanData.demographics || [])
+        ].map((g: any) => g.name)));
+
         await supabase.from("anime_metadata").upsert({
           mal_id,
           title: jikanData.title,
-          genres: jikanData.genres?.map((g: any) => g.name) || [],
+          genres: combinedGenres,
           type: jikanData.type || "Unknown",
           season: jikanData.season || null,
           airing_status: jikanData.status || null,

@@ -22,6 +22,11 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
 
   const poster = anime.images?.jpg?.large_image_url;
 
+  // Force React state to update when Next.js router.refresh() fetches new server data
+  useEffect(() => {
+    setEntry(initialEntry);
+  }, [initialEntry]);  
+
   // --- Dynamic Tab Fetching ---
   useEffect(() => {
     const fetchTabData = async () => {
@@ -54,21 +59,34 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
   const handleAdd = async () => {
     setIsUpdating(true);
     try {
+      const payload = {
+        mal_id: anime.mal_id,
+        title: anime.title,
+        status: "watching",
+        score: 0,
+        watched_episodes: 0,
+        total_episodes: anime.episodes,
+        poster_url: poster,
+      };
+
       const res = await fetch("/api/watchlist/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mal_id: anime.mal_id,
-          title: anime.title,
-          status: "watching",
-          score: 0,
-          watched_episodes: 0,
-          total_episodes: anime.episodes,
-          poster_url: poster,
-        }),
+        body: JSON.stringify(payload),
       });
+      
       const data = await res.json();
-      if (res.ok) setEntry(data.entry);
+      
+      if (res.ok) {
+        // Optimistically update the UI instantly using our own payload as a fallback
+        setEntry(data.entry || data.data || { 
+          ...payload, 
+          id: "temp-id", 
+          created_at: new Date().toISOString() 
+        });
+      }
+      
+      // Tell Next.js to silently refetch the real database row in the background
       router.refresh();
     } finally {
       setIsUpdating(false);

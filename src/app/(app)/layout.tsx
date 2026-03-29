@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/components/SignOutButton";
-import NotificationToggle from "@/components/NotficationToggle";
+import NotificationBell from "@/components/NotificationBell";
 import GlobalEnrichmentTracker from "@/components/GlobalEnrichmentTracker";
 
 export default async function AppLayout({
@@ -13,7 +13,6 @@ export default async function AppLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Fallback protection (though your middleware should catch this first)
   if (!user) {
     redirect("/login");
   }
@@ -50,9 +49,12 @@ export default async function AppLayout({
             </Link>
           </div>
 
-          {/* Right: User Menu */}
-          <div className="flex justify-end w-1/3">
-            <NotificationToggle />
+          {/* Right: User Menu & Notifications */}
+          <div className="flex items-center justify-end gap-4 w-1/3">
+            
+            {/* THE NEW NOTIFICATION BELL */}
+            <NotificationBell />
+
             <div className="group relative">
               <button className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors">
                 <span className="text-sm text-zinc-400 truncate max-w-[120px] md:max-w-xs hidden sm:block">
@@ -71,7 +73,6 @@ export default async function AppLayout({
                 <Link href="/profile" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">Profile</Link>
                 <Link href="/settings" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">Settings</Link>
                 <div className="border-t border-zinc-800 my-1" />
-                {/* Client component for interactive logout */}
                 <SignOutButton />
               </div>
             </div>
@@ -83,7 +84,6 @@ export default async function AppLayout({
       {/* Page Content injected here */}
       {children}
 
-      {/* Persistent Background Tasks */}
       <GlobalEnrichmentTracker />
     </div>
   );

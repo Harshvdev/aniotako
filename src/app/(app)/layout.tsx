@@ -47,6 +47,12 @@ export default async function AppLayout({
             >
               Import
             </Link>
+            <Link 
+              href="/notifications" 
+              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors hidden sm:block"
+            >
+              Notifications
+            </Link>
           </div>
 
           {/* Right: User Menu & Notifications */}
@@ -70,9 +76,11 @@ export default async function AppLayout({
                 <div className="px-4 py-2 mb-1 sm:hidden">
                   <p className="text-xs text-zinc-500 truncate">{user.email}</p>
                 </div>
-                <Link href="/profile" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">Profile</Link>
+                <Link href="/profile" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">My Profile</Link>
                 <Link href="/settings" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">Settings</Link>
+                
                 <div className="border-t border-zinc-800 my-1" />
+                
                 <SignOutButton />
               </div>
             </div>

@@ -43,12 +43,20 @@ export default function AddAnimeSearch() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // NEW: Pagination State
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // --- 1. Initial Search (Page 1) Effect ---
+  // We intentionally omit `page` from the dependency array so this ONLY triggers on filter/query changes.
   useEffect(() => {
     if (!query.trim() && filters.genres.length === 0 && filters.order_by === "All") {
       setResults([]);
       setShowDropdown(false);
+      setHasNextPage(false);
       return;
     }
 
@@ -56,8 +64,11 @@ export default function AddAnimeSearch() {
 
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
+      setPage(1); // Reset back to page 1 on new query
+      
       try {
         const params = new URLSearchParams();
+        params.append("page", "1");
         if (query.trim()) params.append("q", query);
         if (filters.type !== "All") params.append("type", filters.type);
         if (filters.status !== "All") params.append("status", filters.status);
@@ -74,8 +85,9 @@ export default function AddAnimeSearch() {
         const res = await fetch(`/api/jikan/search?${params.toString()}`, { signal: controller.signal });
         
         if (res.ok) {
-          const data = await res.json();
-          setResults(data);
+          const json = await res.json();
+          setResults(json.data);
+          setHasNextPage(json.pagination.has_next_page);
           setShowDropdown(true);
         } else if (res.status === 429) {
            setToast({ message: "Searching too fast! Please wait a moment.", type: "error" });
@@ -93,6 +105,45 @@ export default function AddAnimeSearch() {
     };
   }, [query, filters]);
 
+  // --- 2. Load More (Page 2+) Logic ---
+  const handleLoadMore = async () => {
+    if (isLoadingMore || !hasNextPage) return;
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+
+    try {
+      const params = new URLSearchParams();
+      params.append("page", nextPage.toString());
+      if (query.trim()) params.append("q", query);
+      if (filters.type !== "All") params.append("type", filters.type);
+      if (filters.status !== "All") params.append("status", filters.status);
+      if (filters.rating !== "All") params.append("rating", filters.rating);
+      if (filters.order_by !== "All") params.append("order_by", filters.order_by);
+      if (filters.genres.length > 0) params.append("genres", filters.genres.join(","));
+      
+      if (filters.score !== "All") {
+        const [min, max] = filters.score.split("-");
+        params.append("min_score", min);
+        params.append("max_score", max);
+      }
+
+      const res = await fetch(`/api/jikan/search?${params.toString()}`);
+      
+      if (res.ok) {
+        const json = await res.json();
+        // Append new data to existing results
+        setResults((prev) => [...prev, ...json.data]);
+        setHasNextPage(json.pagination.has_next_page);
+        setPage(nextPage);
+      }
+    } catch (err: any) {
+      console.error("Failed to load more pages", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // --- 3. Click Outside to Close ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -230,17 +281,16 @@ export default function AddAnimeSearch() {
       )}
 
       {showDropdown && results.length > 0 && !isFilterOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto overscroll-contain custom-scrollbar z-10">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto overscroll-contain custom-scrollbar z-10 flex flex-col">
           {results.map((anime, index) => (
             <button
               key={`${anime.mal_id}-${index}`}
-              // THE FIX: Directly route to the detail page!
               onClick={() => {
                 setShowDropdown(false);
                 setIsFilterOpen(false);
                 router.push(`/anime/${anime.mal_id}`);
               }}
-              className="w-full flex items-center gap-4 p-3 hover:bg-zinc-800 transition-colors border-b border-zinc-800/50 last:border-0 text-left"
+              className="w-full flex items-center gap-4 p-3 hover:bg-zinc-800 transition-colors border-b border-zinc-800/50 text-left shrink-0"
             >
               <img src={anime.images.jpg.image_url} alt={anime.title} className="w-12 h-16 object-cover rounded bg-zinc-800 shrink-0" />
               <div className="flex-1 min-w-0">
@@ -263,6 +313,24 @@ export default function AddAnimeSearch() {
               </div>
             </button>
           ))}
+          
+          {/* LOAD MORE / END OF RESULTS */}
+          {hasNextPage ? (
+            <div className="p-3 bg-zinc-900/90 backdrop-blur-sm sticky bottom-0 border-t border-zinc-800 flex justify-center shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
+              <button 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLoadMore(); }}
+                disabled={isLoadingMore}
+                className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sm font-bold text-white rounded-xl transition-colors flex items-center justify-center gap-2 border border-zinc-700"
+              >
+                {isLoadingMore && <div className="w-4 h-4 border-2 border-zinc-500 border-t-cyan-500 rounded-full animate-spin"></div>}
+                {isLoadingMore ? "Loading..." : "Load More"}
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-600 shrink-0">
+              No more results
+            </div>
+          )}
         </div>
       )}
 

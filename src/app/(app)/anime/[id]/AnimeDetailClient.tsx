@@ -306,6 +306,8 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
 
 // --- Mini Component for Tracking Logic ---
 function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
+  const [showCompletePrompt, setShowCompletePrompt] = useState(false);
+
   if (!entry) {
     return (
       <button onClick={onAdd} disabled={isUpdating} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
@@ -313,6 +315,45 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
       </button>
     );
   }
+
+  const checkCompletion = (val: number) => {
+    if (episodes && val === episodes && entry.status !== "completed") {
+      setShowCompletePrompt(true);
+    } else {
+      setShowCompletePrompt(false);
+    }
+  };
+
+  const handleEpisodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = 0;
+    if (episodes && val > episodes) val = episodes;
+    if (val < 0) val = 0;
+
+    onUpdate({ watched_episodes: val });
+    checkCompletion(val);
+  };
+
+  const increment = () => {
+    if (episodes && entry.watched_episodes >= episodes) return;
+    const newVal = entry.watched_episodes + 1;
+    onUpdate({ watched_episodes: newVal });
+    checkCompletion(newVal);
+  };
+
+  const decrement = () => {
+    if (entry.watched_episodes <= 0) return;
+    onUpdate({ watched_episodes: entry.watched_episodes - 1 });
+    setShowCompletePrompt(false);
+  };
+
+  const handleMarkCompleted = () => {
+    onUpdate({ status: "completed" });
+    setShowCompletePrompt(false);
+  };
+
+  // Custom sleek dropdown arrow to replace ugly native OS arrows
+  const selectArrowUI = "appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[position:right_12px_center] bg-no-repeat pr-8";
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-xl">
@@ -326,29 +367,87 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
       <div className="space-y-4">
         <div>
           <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-1 block">Status</label>
-          <select value={entry.status} onChange={(e) => onUpdate({ status: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
-            <option value="watching">Watching</option><option value="completed">Completed</option><option value="on_hold">On Hold</option><option value="dropped">Dropped</option><option value="plan_to_watch">Plan to Watch</option>
+          <select 
+            value={entry.status} 
+            onChange={(e) => {
+              onUpdate({ status: e.target.value });
+              if (e.target.value === "completed") setShowCompletePrompt(false);
+            }} 
+            className={`w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 hover:border-zinc-700 transition-colors cursor-pointer ${selectArrowUI}`}
+          >
+            <option value="watching">Watching</option>
+            <option value="completed">Completed</option>
+            <option value="on_hold">On Hold</option>
+            <option value="dropped">Dropped</option>
+            <option value="plan_to_watch">Plan to Watch</option>
           </select>
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex-1">
+        <div className="flex gap-3">
+          {/* Score Dropdown */}
+          <div className="w-[105px] shrink-0">
             <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-1 block">Score</label>
-            <select value={entry.score || 0} onChange={(e) => onUpdate({ score: Number(e.target.value) || null })} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+            <select 
+              value={entry.score || 0} 
+              onChange={(e) => onUpdate({ score: Number(e.target.value) || null })} 
+              className={`w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 hover:border-zinc-700 transition-colors cursor-pointer ${selectArrowUI}`}
+            >
               <option value={0}>Unrated</option>
               {[10,9,8,7,6,5,4,3,2,1].map(n => <option key={n} value={n}>★ {n}</option>)}
             </select>
           </div>
 
-          <div className="flex-1">
+          {/* Progress Controls */}
+          <div className="flex-1 min-w-0">
             <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-1 block">Progress</label>
-            <div className="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5">
-              <button onClick={() => onUpdate({ watched_episodes: Math.max(0, entry.watched_episodes - 1) })} className="w-6 h-6 flex items-center justify-center bg-zinc-800 text-zinc-400 rounded hover:text-white hover:bg-zinc-700">-</button>
-              <span className="text-sm font-mono font-bold text-white">{entry.watched_episodes} <span className="text-zinc-600 text-xs">/ {episodes || '?'}</span></span>
-              <button onClick={() => onUpdate({ watched_episodes: entry.watched_episodes + 1 })} className="w-6 h-6 flex items-center justify-center bg-zinc-800 text-zinc-400 rounded hover:text-white hover:bg-zinc-700">+</button>
+            <div className="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg p-1 hover:border-zinc-700 transition-colors">
+              
+              <button 
+                onClick={decrement}
+                disabled={entry.watched_episodes <= 0}
+                className="w-8 h-8 flex items-center justify-center bg-zinc-800 text-zinc-400 rounded-md hover:text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                -
+              </button>
+              
+              {/* THE FIX: Symmetrical layout. Both numbers are w-10 with opposite text alignments. */}
+              <div className="flex-1 flex items-center justify-center text-sm font-mono font-bold whitespace-nowrap">
+                <input 
+                  type="number" 
+                  value={entry.watched_episodes === 0 ? "" : entry.watched_episodes} 
+                  onChange={handleEpisodeChange}
+                  placeholder="0"
+                  className="w-10 text-right px-1 py-0.5 m-0 bg-transparent text-white focus:outline-none focus:bg-zinc-800 rounded transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="text-zinc-600 mx-0.5">/</span>
+                <span className="w-10 text-left text-zinc-500 px-1 py-0.5">{episodes || '?'}</span>
+              </div>
+
+              <button 
+                onClick={increment}
+                disabled={episodes ? entry.watched_episodes >= episodes : false}
+                className="w-8 h-8 flex items-center justify-center bg-zinc-800 text-zinc-400 rounded-md hover:text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                +
+              </button>
+
             </div>
           </div>
         </div>
+
+        {/* Completion Prompt */}
+        {showCompletePrompt && (
+          <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+            <span className="text-xs text-emerald-400 font-medium">All episodes watched!</span>
+            <button 
+              onClick={handleMarkCompleted}
+              className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors shadow-sm"
+            >
+              Complete
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );

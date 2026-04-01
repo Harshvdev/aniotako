@@ -23,15 +23,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, count: 0 });
     }
 
-    // 3. Attach user_id to every entry before inserting
-    const entriesWithUser = entries.map((entry) => ({
-      ...entry,
-      user_id: user.id,
-    }));
+    // 3. Attach user_id and fix MAL "Completed = 0 episodes" export bug
+    const entriesWithUser = entries.map((entry) => {
+      let watched = entry.watched_episodes || 0;
+      
+      // If MAL exported a completed show with 0 watched episodes, force it to the known total
+      if (entry.status === 'completed' && watched === 0 && entry.total_episodes > 0) {
+        watched = entry.total_episodes;
+      }
+
+      return {
+        ...entry,
+        watched_episodes: watched,
+        user_id: user.id,
+      };
+    });
 
     // 4. Bulk Upsert
-    // The onConflict parameter uses the UNIQUE(user_id, mal_id) constraint 
-    // we defined in the SQL schema to update existing rows instead of crashing.
     const { error: upsertError } = await supabase
       .from("watchlist_entries")
       .upsert(entriesWithUser, {

@@ -7,7 +7,6 @@ export const dynamic = 'force-dynamic';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Custom fetch wrapper that forces IPv4 resolution to prevent ENETUNREACH timeouts
 const fetchIPv4 = (url: string, timeoutMs: number = 6000): Promise<any> => {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { family: 4 }, (res) => {
@@ -46,9 +45,10 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // THE FIX: Included `status` and `watched_episodes` in the select payload
     const { data: allEntries, error: fetchError } = await supabase
       .from("watchlist_entries")
-      .select("id, mal_id, title, poster_url")
+      .select("id, mal_id, title, poster_url, status, watched_episodes")
       .eq("user_id", user.id);
 
     if (fetchError) throw new Error(`Failed to fetch watchlist: ${fetchError.message}`);
@@ -77,43 +77,44 @@ export async function POST(req: Request) {
       await delay(1100); 
 
       try {
-        // Use our bulletproof IPv4 fetcher
         const jsonResponse = await fetchIPv4(`https://api.jikan.moe/v4/anime/${entry.mal_id}`);
         const data = jsonResponse.data;
         
         if (!data) continue;
 
         const poster_url = data.images?.jpg?.large_image_url || entry.poster_url;
-
-        // Combine all tag types into one deduplicated array
         const combinedGenres = Array.from(new Set([
-          ...(data.genres || []),
-          ...(data.explicit_genres || []),
-          ...(data.themes || []),
-          ...(data.demographics || [])
+          ...(data.genres || []), ...(data.explicit_genres || []),
+          ...(data.themes || []), ...(data.demographics || [])
         ].map((g: any) => g.name)));
 
         const metadata = {
-          mal_id: data.mal_id,
-          title: data.title || entry.title,
-          genres: combinedGenres,
-          type: data.type || "Unknown",
-          season: data.season || null,
-          airing_status: data.status || null,
-          studio: data.studios?.[0]?.name || null,
-          year: data.year || null,
-          total_episodes: data.episodes || null,
-          synopsis: data.synopsis || null,
-          poster_url: poster_url,
-          cached_at: new Date().toISOString(),
-          jikan_raw: data
+          mal_id: data.mal_id, title: data.title || entry.title, genres: combinedGenres,
+          type: data.type || "Unknown", season: data.season || null,
+          airing_status: data.status || null, studio: data.studios?.[0]?.name || null,
+          year: data.year || null, total_episodes: data.episodes || null,
+          synopsis: data.synopsis || null, poster_url: poster_url,
+          cached_at: new Date().toISOString(), jikan_raw: data
         };
 
-        // 1. Update Watchlist Entry Poster
-        if (entry.poster_url !== poster_url) {
+        // 1. Update Watchlist Entry Poster & Fix Missing Episodes
+        const needsPosterUpdate = entry.poster_url !== poster_url;
+        const needsEpisodeFix = entry.status === 'completed' && entry.watched_episodes === 0 && data.episodes > 0;
+
+        if (needsPosterUpdate || needsEpisodeFix) {
+          const updateData: any = {};
+          if (needsPosterUpdate) {
+            updateData.poster_url = poster_url;
+            updateData.total_episodes = data.episodes;
+          }
+          if (needsEpisodeFix) {
+            updateData.watched_episodes = data.episodes;
+            updateData.total_episodes = data.episodes; // ensure it is synced
+          }
+
           const { error: updateErr } = await supabase
             .from("watchlist_entries")
-            .update({ poster_url, total_episodes: data.episodes })
+            .update(updateData)
             .eq("id", entry.id);
           
           if (updateErr) throw new Error(`Watchlist Update Error: ${updateErr.message}`);
@@ -128,14 +129,10 @@ export async function POST(req: Request) {
 
       } catch (err: any) {
         console.error(`[ENRICH] Hard Crash on ${entry.mal_id}:`, err.message || err);
-
-        // Handle Rate Limits Safely
         if (err.status === 429) {
           console.warn(`[ENRICH] Rate Limit Hit! Breaking batch.`);
           break;
         }
-
-        // If it's a hard 404 or persistent API failure, mark as unknown so it stops looping
         if (err.status === 404 || err.status >= 500) {
            await supabaseAdmin.from("anime_metadata").upsert({
             mal_id: entry.mal_id, title: entry.title, type: "Unknown", cached_at: new Date().toISOString()
@@ -148,8 +145,6 @@ export async function POST(req: Request) {
     const totalMissing = allEntries.filter(e => !e.poster_url || !existingMalIds.has(e.mal_id)).length;
     const remaining = Math.max(0, totalMissing - enrichedCount);
     
-    console.log(`--- BATCH COMPLETE. Processed: ${enrichedCount}. Remaining: ${remaining} ---\n`);
-
     return NextResponse.json({ enriched: enrichedCount, remaining });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -157,6 +152,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  // ... existing GET function remains unchanged
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

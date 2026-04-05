@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import AsyncButton from "@/components/AsyncButton";
 
 // Helper for Web Push
 function urlBase64ToUint8Array(base64String: string) {
@@ -206,9 +207,9 @@ export default function SettingsPage() {
                 onChange={e => setDisplayName(e.target.value)}
                 className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-500 focus:outline-none"
               />
-              <button onClick={handleSaveProfile} disabled={isSavingProfile} className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-colors disabled:opacity-50">
-                {isSavingProfile ? "Saving..." : "Save"}
-              </button>
+              <AsyncButton onClick={handleSaveProfile} className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
+                Save
+              </AsyncButton>
             </div>
           </div>
           <div>
@@ -234,17 +235,17 @@ export default function SettingsPage() {
               <p className="text-sm text-zinc-400 mt-1">Get instant alerts when new episodes air.</p>
               {pushPermission === "denied" && <p className="text-xs text-red-400 mt-2">Permission denied. Please enable in your browser settings.</p>}
             </div>
-            <button 
+            <AsyncButton 
               onClick={handlePushToggle} 
-              disabled={isPushLoading || pushPermission === "denied"}
-              className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
+              disabled={pushPermission === "denied"}
+              className={`px-5 py-2 rounded-full text-sm font-bold ${
                 isSubscribed 
                   ? "bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700" 
                   : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50"
               }`}
             >
-              {isPushLoading ? "Working..." : isSubscribed ? "Disable" : "Enable"}
-            </button>
+              {isSubscribed ? "Disable" : "Enable"}
+            </AsyncButton>
           </div>
 
           <div className="flex items-center justify-between py-6">
@@ -336,13 +337,13 @@ export default function SettingsPage() {
                   onChange={e => setDeleteInput(e.target.value)}
                   className="flex-1 bg-zinc-950 border border-red-900/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                 />
-                <button 
+                <AsyncButton 
                   onClick={handleDeleteAll}
-                  disabled={deleteInput !== "DELETE" || isDeleting}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl transition-colors"
+                  disabled={deleteInput !== "DELETE"}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl"
                 >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
+                  Delete
+                </AsyncButton>
               </div>
             </div>
           </div>

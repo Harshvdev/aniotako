@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AsyncButton from "@/components/AsyncButton";
 
 interface Props {
   anime: any;
@@ -310,12 +311,16 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
 
   if (!entry) {
     return (
-      <button onClick={onAdd} disabled={isUpdating} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-        {isUpdating ? "Adding..." : "+ Add to List"}
-      </button>
+      <AsyncButton 
+        onClick={onAdd} 
+        disabled={isUpdating} 
+        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 disabled:opacity-50 shadow-[0_0_20px_rgba(217,70,239,0.3)]"
+      >
+        + Add to List
+      </AsyncButton>
     );
   }
-
+  
   const checkCompletion = (val: number) => {
     if (episodes && val === episodes && entry.status !== "completed") {
       setShowCompletePrompt(true);

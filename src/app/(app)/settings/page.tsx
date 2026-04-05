@@ -200,16 +200,19 @@ export default function SettingsPage() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg">
           <div>
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Display Name</label>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-start">
               <input 
                 type="text" 
                 value={displayName} 
                 onChange={e => setDisplayName(e.target.value)}
                 className="w-full sm:flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-500 focus:outline-none"
               />
-              <AsyncButton onClick={handleSaveProfile} className="w-full sm:w-auto px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
-                Save
-              </AsyncButton>
+              {/* THE FIX: A strict structural wrapper to contain the AsyncButton's width */}
+              <div className="w-full sm:w-auto shrink-0">
+                <AsyncButton onClick={handleSaveProfile} className="w-full px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
+                  Save
+                </AsyncButton>
+              </div>
             </div>
           </div>
           <div>
@@ -227,70 +230,80 @@ export default function SettingsPage() {
       {/* --- NOTIFICATIONS SECTION --- */}
       <section className="mb-12">
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Notifications</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg divide-y divide-zinc-800">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg divide-y divide-zinc-800">
           
-          <div className="flex items-center justify-between pb-6">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
+            <div className="flex-1">
               <h3 className="text-white font-bold">Browser Push Notifications</h3>
               <p className="text-sm text-zinc-400 mt-1">Get instant alerts when new episodes air.</p>
               {pushPermission === "denied" && <p className="text-xs text-red-400 mt-2">Permission denied. Please enable in your browser settings.</p>}
             </div>
-            <AsyncButton 
-              onClick={handlePushToggle} 
-              disabled={pushPermission === "denied"}
-              className={`px-5 py-2 rounded-full text-sm font-bold ${
-                isSubscribed 
-                  ? "bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700" 
-                  : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50"
-              }`}
-            >
-              {isSubscribed ? "Disable" : "Enable"}
-            </AsyncButton>
+            
+            {/* THE FIX: Structural wrapper and dynamic button width */}
+            <div className="w-full sm:w-auto shrink-0">
+              <AsyncButton 
+                onClick={handlePushToggle} 
+                disabled={pushPermission === "denied"}
+                className={`w-full sm:w-auto px-5 py-2.5 sm:py-2 rounded-xl sm:rounded-full text-sm font-bold transition-all ${
+                  isSubscribed 
+                    ? "bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700" 
+                    : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50"
+                }`}
+              >
+                {isSubscribed ? "Disable" : "Enable"}
+              </AsyncButton>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between py-6">
-            <div>
+          {/* Added gap-4 and shrink-0 to prevent text from touching the toggles on tiny screens */}
+          <div className="flex items-center justify-between gap-4 py-6">
+            <div className="flex-1 pr-2">
               <h3 className="text-white font-bold">Email Notifications</h3>
               <p className="text-sm text-zinc-400 mt-1">Receive a weekly digest of airings.</p>
             </div>
-            <ToggleSwitch checked={emailNotify} onChange={(val) => handleUpdatePref("email_notifications", val)} />
+            <div className="shrink-0">
+              <ToggleSwitch checked={emailNotify} onChange={(val) => handleUpdatePref("email_notifications", val)} />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between pt-6">
-            <div>
+          <div className="flex items-center justify-between gap-4 pt-6">
+            <div className="flex-1 pr-2">
               <h3 className="text-white font-bold">Strict Notifications</h3>
               <p className="text-sm text-zinc-400 mt-1">Only notify me for anime I am currently "Watching".</p>
             </div>
-            <ToggleSwitch checked={notifyWatchingOnly} onChange={(val) => handleUpdatePref("notify_watching_only", val)} />
+            <div className="shrink-0">
+              <ToggleSwitch checked={notifyWatchingOnly} onChange={(val) => handleUpdatePref("notify_watching_only", val)} />
+            </div>
           </div>
+
         </div>
       </section>
 
       {/* --- LIST PREFERENCES SECTION --- */}
       <section className="mb-12">
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">List Preferences</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg divide-y divide-zinc-800">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg divide-y divide-zinc-800">
           
-          <div className="flex items-center justify-between pb-6">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
+            <div className="flex-1 pr-2">
               <h3 className="text-white font-bold">Default View</h3>
               <p className="text-sm text-zinc-400 mt-1">How your watchlist is displayed on load.</p>
             </div>
-            <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1">
-              <button onClick={() => handleLocalPref("aniotako_view", "grid")} className={`px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "grid" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>Grid</button>
-              <button onClick={() => handleLocalPref("aniotako_view", "list")} className={`px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "list" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>List</button>
+            <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
+              <button onClick={() => handleLocalPref("aniotako_view", "grid")} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "grid" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>Grid</button>
+              <button onClick={() => handleLocalPref("aniotako_view", "list")} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "list" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>List</button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between py-6">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
+            <div className="flex-1 pr-2">
               <h3 className="text-white font-bold">Default Sort</h3>
               <p className="text-sm text-zinc-400 mt-1">How your entries are sorted.</p>
             </div>
             <select 
               value={defaultSort} 
               onChange={(e) => handleLocalPref("aniotako_sort", e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
             >
               <option value="Updated">Last Updated</option>
               <option value="Title">Title (A-Z)</option>
@@ -299,12 +312,14 @@ export default function SettingsPage() {
             </select>
           </div>
 
-          <div className="flex items-center justify-between pt-6">
-            <div>
+          <div className="flex items-center justify-between gap-4 pt-6">
+            <div className="flex-1 pr-2">
               <h3 className="text-white font-bold flex items-center gap-2">Show Adult Content <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] uppercase rounded border border-red-500/30">18+</span></h3>
               <p className="text-sm text-zinc-400 mt-1">Include explicit genres (Rx) in search results.</p>
             </div>
-            <ToggleSwitch checked={showAdult} onChange={(val) => handleUpdatePref("show_adult", val)} />
+            <div className="shrink-0">
+              <ToggleSwitch checked={showAdult} onChange={(val) => handleUpdatePref("show_adult", val)} />
+            </div>
           </div>
 
         </div>
@@ -329,7 +344,7 @@ export default function SettingsPage() {
             <div className="flex-1">
               <h3 className="text-white font-bold">Delete All Entries</h3>
               <p className="text-sm text-zinc-400 mt-1 mb-4">This will permanently delete your entire watchlist. This action cannot be undone.</p>
-              <div className="flex flex-col sm:flex-row gap-3 max-w-sm">
+              <div className="flex flex-col sm:flex-row gap-3 max-w-sm items-start">
                 <input 
                   type="text" 
                   placeholder="Type DELETE to confirm" 
@@ -337,13 +352,16 @@ export default function SettingsPage() {
                   onChange={e => setDeleteInput(e.target.value)}
                   className="w-full sm:flex-1 bg-zinc-950 border border-red-900/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                 />
-                <AsyncButton 
-                  onClick={handleDeleteAll}
-                  disabled={deleteInput !== "DELETE"}
-                  className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl"
-                >
-                  Delete
-                </AsyncButton>
+                {/* THE FIX: Structural wrapper */}
+                <div className="w-full sm:w-auto shrink-0">
+                  <AsyncButton 
+                    onClick={handleDeleteAll}
+                    disabled={deleteInput !== "DELETE"}
+                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl"
+                  >
+                    Delete
+                  </AsyncButton>
+                </div>
               </div>
             </div>
           </div>

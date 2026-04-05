@@ -112,7 +112,7 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           </button>
 
           {isScoreOpen && (
-            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-20 grid grid-cols-5 p-1 gap-1">
+            <div className="absolute top-full right-0 mt-1 w-32 max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-20 grid grid-cols-5 p-1 gap-1 custom-scrollbar">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                 <button
                   key={num}
@@ -140,31 +140,40 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           </button>
 
           {isOptionsOpen && (
-            <div className="absolute top-full left-0 mt-1 w-40 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-20 py-1">
-              <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Status</div>
-              {["watching", "completed", "on_hold", "dropped", "plan_to_watch"].map((s) => (
-                <button
-                  key={s}
-                  onClick={(e) => { e.preventDefault(); handleUpdate({ status: s }); setIsOptionsOpen(false); }}
-                  className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
+            <>
+              {/* Mobile Backdrop (Closes menu when tapping outside the sheet) */}
+              <div 
+                className="fixed inset-0 bg-black/60 z-[65] sm:hidden backdrop-blur-sm" 
+                onClick={(e) => { e.preventDefault(); setIsOptionsOpen(false); }} 
+              />
+              
+              {/* Responsive Panel: Bottom Sheet on Mobile, Dropdown on Desktop */}
+              <div className="fixed inset-x-0 bottom-0 sm:absolute sm:bottom-auto sm:top-full sm:left-0 sm:mt-1 w-full sm:w-40 max-h-[80vh] overflow-y-auto bg-zinc-900 border-t sm:border border-zinc-700 rounded-t-2xl sm:rounded-xl shadow-[0_-20px_40px_rgba(0,0,0,0.6)] sm:shadow-2xl z-[70] py-4 sm:py-1 animate-in slide-in-from-bottom-full sm:slide-in-from-top-2 pb-8 sm:pb-1">
+                <div className="px-4 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Status</div>
+                {["watching", "completed", "on_hold", "dropped", "plan_to_watch"].map((s) => (
+                  <button
+                    key={s}
+                    onClick={(e) => { e.preventDefault(); handleUpdate({ status: s }); setIsOptionsOpen(false); }}
+                    className={`w-full text-left px-6 sm:px-4 py-3 sm:py-2 text-sm sm:text-xs hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
+                  >
+                    {formatStatus(s)}
+                  </button>
+                ))}
+                <div className="border-t border-zinc-800 my-1"></div>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if(window.confirm("Remove this anime from your list?")) {
+                      onRemove?.(anime.id); 
+                      setIsOptionsOpen(false);
+                    }
+                  }}
+                  className="w-full text-left px-6 sm:px-4 py-3 sm:py-2 text-sm sm:text-xs text-red-400 hover:bg-zinc-800"
                 >
-                  {formatStatus(s)}
+                  Remove from list
                 </button>
-              ))}
-              <div className="border-t border-zinc-800 my-1"></div>
-              <button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  if(window.confirm("Remove this anime from your list?")) {
-                    onRemove?.(anime.id); 
-                    setIsOptionsOpen(false);
-                  }
-                }}
-                className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-zinc-800"
-              >
-                Remove from list
-              </button>
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>

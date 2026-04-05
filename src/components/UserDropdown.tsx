@@ -36,7 +36,7 @@ export default function UserDropdown({ email }: { email: string | undefined }) {
 
       {/* The Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-48 min-w-[200px] bg-zinc-900 border border-zinc-800 rounded-xl py-2 shadow-2xl z-[60] animate-in fade-in slide-in-from-top-2 origin-top-right">
+        <div className="absolute right-0 top-full mt-2 w-48 min-w-[200px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl py-2 shadow-2xl z-[60] animate-in fade-in slide-in-from-top-2 origin-top-right custom-scrollbar">
           <div className="px-4 py-2 mb-1 sm:hidden">
             <p className="text-xs text-zinc-500 truncate">{email}</p>
           </div>

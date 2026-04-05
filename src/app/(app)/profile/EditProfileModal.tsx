@@ -38,7 +38,7 @@ export default function EditProfileModal({ currentName }: { currentName: string 
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-[90%] max-w-[420px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl animate-in zoom-in-95 custom-scrollbar">
             <h3 className="text-lg font-bold text-white mb-4">Edit Profile</h3>
             
             <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Display Name</label>

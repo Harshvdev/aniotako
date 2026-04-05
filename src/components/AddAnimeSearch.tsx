@@ -212,7 +212,7 @@ export default function AddAnimeSearch() {
       </div>
 
       {isFilterOpen && (
-        <div className="absolute top-full left-0 right-0 mt-3 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-5 z-20 animate-in fade-in slide-in-from-top-2">
+        <div className="absolute top-full right-0 mt-3 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[600px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-5 z-50 animate-in fade-in slide-in-from-top-2 custom-scrollbar">
           
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <div className="space-y-1">

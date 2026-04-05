@@ -32,7 +32,7 @@ export default function AsyncButton({ onClick, className, children, disabled }: 
   };
 
   return (
-    <div className="flex flex-col gap-1 items-start w-full">
+    <div className={`flex flex-col gap-1 items-start ${className?.includes('w-full') ? 'w-full' : ''}`}>
       <button 
         onClick={handleClick} 
         disabled={status === "loading" || disabled} 

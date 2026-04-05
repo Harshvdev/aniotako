@@ -200,14 +200,14 @@ export default function SettingsPage() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg">
           <div>
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Display Name</label>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input 
                 type="text" 
                 value={displayName} 
                 onChange={e => setDisplayName(e.target.value)}
-                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full sm:flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-500 focus:outline-none"
               />
-              <AsyncButton onClick={handleSaveProfile} className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
+              <AsyncButton onClick={handleSaveProfile} className="w-full sm:w-auto px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
                 Save
               </AsyncButton>
             </div>
@@ -329,18 +329,18 @@ export default function SettingsPage() {
             <div className="flex-1">
               <h3 className="text-white font-bold">Delete All Entries</h3>
               <p className="text-sm text-zinc-400 mt-1 mb-4">This will permanently delete your entire watchlist. This action cannot be undone.</p>
-              <div className="flex gap-2 max-w-sm">
+              <div className="flex flex-col sm:flex-row gap-3 max-w-sm">
                 <input 
                   type="text" 
                   placeholder="Type DELETE to confirm" 
                   value={deleteInput}
                   onChange={e => setDeleteInput(e.target.value)}
-                  className="flex-1 bg-zinc-950 border border-red-900/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-red-500"
+                  className="w-full sm:flex-1 bg-zinc-950 border border-red-900/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                 />
                 <AsyncButton 
                   onClick={handleDeleteAll}
                   disabled={deleteInput !== "DELETE"}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl"
+                  className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm rounded-xl"
                 >
                   Delete
                 </AsyncButton>

@@ -56,8 +56,8 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
   } else {
-    // If LOGGED IN, and trying to access login/signup pages
-    if (isAuthPath) {
+    // If LOGGED IN, and trying to access login/signup pages OR the root landing page
+    if (isAuthPath || path === "/") {
       const redirectUrl = url.clone();
       redirectUrl.pathname = "/watchlist";
       return NextResponse.redirect(redirectUrl);

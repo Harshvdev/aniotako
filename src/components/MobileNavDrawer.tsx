@@ -12,7 +12,7 @@ export default function MobileNavDrawer() {
 
   return (
     <>
-      {/* The Hamburger Button (Hidden on Desktop: md:hidden) */}
+      {/* The Hamburger Button */}
       <button 
         onClick={() => setIsOpen(true)} 
         className="md:hidden p-2 -ml-2 text-zinc-400 hover:text-white transition-colors"
@@ -22,18 +22,15 @@ export default function MobileNavDrawer() {
         </svg>
       </button>
 
-      {/* The Slide-in Drawer (Portaled to avoid CSS clipping) */}
+      {/* The Slide-in Drawer */}
       {mounted && isOpen && createPortal(
         <div className="md:hidden">
-          {/* Dark Backdrop */}
           <div 
             className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm animate-in fade-in" 
             onClick={() => setIsOpen(false)} 
           />
           
-          {/* Drawer Panel */}
           <div className="fixed inset-y-0 left-0 w-64 bg-zinc-950 border-r border-zinc-800 shadow-2xl z-[101] flex flex-col animate-in slide-in-from-left">
-            
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
               <span className="font-bold text-white tracking-widest uppercase text-sm">Menu</span>
               <button onClick={() => setIsOpen(false)} className="p-2 -mr-2 text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-full transition-colors">
@@ -45,6 +42,7 @@ export default function MobileNavDrawer() {
 
             <div className="flex flex-col p-4 gap-2 overflow-y-auto custom-scrollbar">
               <Link href="/watchlist" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Watchlist</Link>
+              <Link href="/calendar" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-cyan-400 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Calendar</Link>
               <Link href="/import" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Import</Link>
               <Link href="/notifications" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Notifications</Link>
               
@@ -53,7 +51,6 @@ export default function MobileNavDrawer() {
               <Link href="/profile" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">My Profile</Link>
               <Link href="/settings" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Settings</Link>
             </div>
-
           </div>
         </div>,
         document.body

@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 
 interface JikanAnime {
   mal_id: number;
   title: string;
+  title_english?: string;
   type: string;
   year: number;
   episodes: number;
@@ -31,6 +33,8 @@ const GENRES = [
 
 export default function AddAnimeSearch() {
   const router = useRouter();
+
+  const { getTitle } = useTitleLanguage();
   
   const [query, setQuery] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -294,7 +298,9 @@ export default function AddAnimeSearch() {
             >
               <img src={anime.images.jpg.image_url} alt={anime.title} className="w-12 h-16 object-cover rounded bg-zinc-800 shrink-0" />
               <div className="flex-1 min-w-0">
-                <h4 className="text-white font-medium text-sm truncate">{anime.title}</h4>
+                <h4 className="text-white font-medium text-sm truncate" title={getTitle(anime)}>
+                  {getTitle(anime)}
+                </h4>
                 <div className="text-xs text-zinc-500 flex items-center gap-2 mt-1">
                   <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-[10px] text-zinc-300 font-bold">{anime.type}</span>
                   {anime.year && <span>{anime.year}</span>}

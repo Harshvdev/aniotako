@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     // THE FIX: Included `status` and `watched_episodes` in the select payload
     const { data: allEntries, error: fetchError } = await supabase
       .from("watchlist_entries")
-      .select("id, mal_id, title, poster_url, status, watched_episodes")
+      .select("id, mal_id, title, poster_url, status, watched_episodes, title_english, title_romaji")
       .eq("user_id", user.id);
 
     if (fetchError) throw new Error(`Failed to fetch watchlist: ${fetchError.message}`);
@@ -89,11 +89,19 @@ export async function POST(req: Request) {
         ].map((g: any) => g.name)));
 
         const metadata = {
-          mal_id: data.mal_id, title: data.title || entry.title, genres: combinedGenres,
-          type: data.type || "Unknown", season: data.season || null,
-          airing_status: data.status || null, studio: data.studios?.[0]?.name || null,
-          year: data.year || null, total_episodes: data.episodes || null,
-          synopsis: data.synopsis || null, poster_url: poster_url,
+          mal_id: data.mal_id,
+          title: data.title || entry.title,
+          title_english: data.title_english || null,
+          title_romaji: data.title || null,
+          genres: combinedGenres,
+          type: data.type || "Unknown",
+          season: data.season || null,
+          airing_status: data.status || null,
+          studio: data.studios?.[0]?.name || null,
+          year: data.year || null,
+          total_episodes: data.episodes || null,
+          synopsis: data.synopsis || null,
+          poster_url: poster_url,
           cached_at: new Date().toISOString(), jikan_raw: data
         };
 
@@ -101,7 +109,7 @@ export async function POST(req: Request) {
         const needsPosterUpdate = entry.poster_url !== poster_url;
         const needsEpisodeFix = entry.status === 'completed' && entry.watched_episodes === 0 && data.episodes > 0;
 
-        if (needsPosterUpdate || needsEpisodeFix) {
+        if (needsPosterUpdate || needsEpisodeFix|| !entry.title_english) {
           const updateData: any = {};
           if (needsPosterUpdate) {
             updateData.poster_url = poster_url;
@@ -111,6 +119,9 @@ export async function POST(req: Request) {
             updateData.watched_episodes = data.episodes;
             updateData.total_episodes = data.episodes; // ensure it is synced
           }
+
+          updateData.title_english = data.title_english;
+          updateData.title_romaji = data.title;
 
           const { error: updateErr } = await supabase
             .from("watchlist_entries")

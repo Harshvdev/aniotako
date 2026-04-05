@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 
 export interface WatchlistEntry {
   id: string;
@@ -20,7 +21,9 @@ interface AnimeCardProps {
   onRemove?: (id: string) => void;
 }
 
+
 export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
+  const { getTitle } = useTitleLanguage();
   const [anime, setAnime] = useState<WatchlistEntry>(entry);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -28,6 +31,7 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
   
   const scoreRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
+  
 
   useEffect(() => {
     setMounted(true);
@@ -216,8 +220,8 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
             {formatStatus(anime.status)}
           </span>
           <Link href={`/anime/${anime.mal_id}`} className="block group-hover:text-cyan-400 transition-colors">
-            <h3 className="font-semibold text-[12px] sm:text-sm line-clamp-2 leading-snug cursor-pointer" title={anime.title}>
-              {anime.title}
+            <h3 className="font-semibold text-[12px] sm:text-sm line-clamp-2 leading-snug cursor-pointer" title={getTitle(anime)}>
+              {getTitle(anime)}
             </h3>
           </Link>
         </div>

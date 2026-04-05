@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 import Link from "next/link";
+
 
 interface CalendarEntry {
   mal_id: number;
@@ -12,6 +14,8 @@ interface CalendarEntry {
   total_episodes: number | null;
   status: string;
   watched_episodes: number;
+  title_english?: string | null;
+  title_romaji?: string | null;
 }
 
 const formatStatus = (status: string) => status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
@@ -33,8 +37,10 @@ const getSafeDateString = (d: Date) => {
 };
 
 export default function CalendarPage() {
+  const { getTitle } = useTitleLanguage();
   const [selectedDate, setSelectedDate] = useState(() => getSafeDateString(new Date()));
   const [animeList, setAnimeList] = useState<CalendarEntry[]>([]);
+  
   
   // UI States
   const [isLoading, setIsLoading] = useState(true);
@@ -224,10 +230,9 @@ export default function CalendarPage() {
                   <span className="bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest">
                     {anime.format}
                   </span>
-                </div>
-                
+                </div>   
                 <h3 className="font-bold text-white text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors">
-                  {anime.title}
+                  {getTitle(anime)}
                 </h3>
                 
                 {/* --- CLARIFIED UI: Broadcast Time & User Progress --- */}

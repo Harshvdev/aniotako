@@ -67,6 +67,8 @@ export async function GET(req: Request) {
         return {
           mal_id: anime.mal_id,
           title: anime.title,
+          title_english: anime.title_english || null,
+          title_romaji: anime.title || null,
           poster_url: anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url,
           format: anime.type,
           time: anime.broadcast?.string || "Time Unknown",

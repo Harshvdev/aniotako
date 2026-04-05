@@ -25,7 +25,7 @@ export default async function WatchlistPage() {
   const { data: metadata } = await supabase
     .from("anime_metadata")
     // ADDED: airing_status to the select query
-    .select("mal_id, genres, year, type, season, airing_status") 
+    .select("mal_id, genres, year, type, season, airing_status, title_english, title_romaji") 
     .in("mal_id", malIds);
 
   // 3. Merge them together
@@ -33,6 +33,9 @@ export default async function WatchlistPage() {
     const meta = metadata?.find(m => m.mal_id === entry.mal_id);
     return {
       ...entry,
+      // THE FIX: Fallback to the metadata titles if the watchlist entry is missing them
+      title_english: entry.title_english || meta?.title_english || null,
+      title_romaji: entry.title_romaji || meta?.title_romaji || entry.title,
       anime_metadata: meta ? {
         genres: meta.genres || [],
         year: meta.year || null,

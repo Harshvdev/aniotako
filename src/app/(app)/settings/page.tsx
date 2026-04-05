@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 
 // Helper for Web Push
 function urlBase64ToUint8Array(base64String: string) {
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   // --- State ---
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const { titleLanguage, setTitleLanguage } = useTitleLanguage();
 
   // Account
   const [email, setEmail] = useState("");
@@ -62,11 +64,14 @@ export default function SettingsPage() {
         supabase.from("user_preferences").select("*").eq("user_id", user.id).single()
       ]);
 
+      
+      if (profile) setDisplayName(profile.display_name || "");
       if (profile) setDisplayName(profile.display_name || "");
       if (prefs) {
         setNotifyWatchingOnly(prefs.notify_watching_only);
         setEmailNotify(prefs.email_notifications);
         setShowAdult(prefs.show_adult);
+        
       } else {
         // If trigger hasn't fired yet for some reason, create it
         await supabase.from("user_preferences").upsert({ user_id: user.id });
@@ -113,15 +118,16 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUpdatePref = async (key: string, value: boolean) => {
+  const handleUpdatePref = async (key: string, value: boolean | string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    // Optimistic UI
-    if (key === "notify_watching_only") setNotifyWatchingOnly(value);
-    if (key === "email_notifications") setEmailNotify(value);
-    if (key === "show_adult") setShowAdult(value);
+    // Optimistic UI (We check if it's a boolean to keep TypeScript happy)
+    if (key === "notify_watching_only" && typeof value === "boolean") setNotifyWatchingOnly(value);
+    if (key === "email_notifications" && typeof value === "boolean") setEmailNotify(value);
+    if (key === "show_adult" && typeof value === "boolean") setShowAdult(value);
 
+    // Save to database
     await supabase.from("user_preferences").update({ [key]: value }).eq("user_id", user.id);
     showToast("Preferences saved.");
   };
@@ -280,11 +286,34 @@ export default function SettingsPage() {
       </section>
 
       {/* --- LIST PREFERENCES SECTION --- */}
+      {/* --- LIST PREFERENCES SECTION --- */}
       <section className="mb-12">
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">List Preferences</h2>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg divide-y divide-zinc-800">
           
+          {/* THE NEW FIX: Title Language Toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
+            <div className="flex-1 pr-2">
+              <h3 className="text-white font-bold">Title Language</h3>
+              <p className="text-sm text-zinc-400 mt-1">Preferred language for anime titles.</p>
+            </div>
+            <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
+              <button 
+                onClick={() => { setTitleLanguage("english"); handleUpdatePref("title_language", "english"); }} 
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${titleLanguage === "english" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
+              >
+                English
+              </button>
+              <button 
+                onClick={() => { setTitleLanguage("romaji"); handleUpdatePref("title_language", "romaji"); }} 
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${titleLanguage === "romaji" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
+              >
+                Romaji
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
             <div className="flex-1 pr-2">
               <h3 className="text-white font-bold">Default View</h3>
               <p className="text-sm text-zinc-400 mt-1">How your watchlist is displayed on load.</p>

@@ -34,6 +34,7 @@ export async function POST(req: Request) {
 
       return {
         ...entry,
+        title_romaji: entry.title,
         watched_episodes: watched,
         user_id: user.id,
       };

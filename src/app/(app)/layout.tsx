@@ -44,6 +44,7 @@ export default async function AppLayout({
           {/* Middle: Navigation Links (THE FIX: Hidden on mobile via md:flex) */}
           <div className="hidden md:flex items-center justify-center gap-6 flex-1">
             <Link href="/watchlist" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Watchlist</Link>
+            <Link href="/calendar" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Calendar</Link>
             <Link href="/import" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Import</Link>
             <Link href="/notifications" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Notifications</Link>
           </div>

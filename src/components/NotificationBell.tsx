@@ -196,7 +196,7 @@ export default function NotificationBell() {
                         {notif.anime_title}
                       </p>
                       <p className="text-xs text-zinc-400 mt-0.5">
-                        New episode out today!
+                        {notif.episode_number ? `Episode ${notif.episode_number} is out today!` : "New episode out today!"}
                       </p>
                       <p className="text-[10px] font-bold text-zinc-500 mt-1.5 uppercase tracking-wider">
                         {formatRelativeTime(notif.created_at)}

@@ -4,12 +4,11 @@ import webpush from "web-push";
 
 // Initialize Web Push with your VAPID keys
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || "mailto:admin@aniotako.com",
+  process.env.VAPID_SUBJECT || "mailto:harsh.vs.tech@gmail.com",
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
 
-// We use GET for Vercel Cron Jobs
 export async function GET(req: Request) {
   try {
     // 1. Authenticate the Cron Request
@@ -18,13 +17,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized cron request" }, { status: 401 });
     }
 
-    // Initialize Supabase Admin Client to bypass RLS
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 2. Determine today's day of the week for Jikan
+    // 2. Determine today's day of the week
     const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     const todayStr = days[new Date().getDay()];
 
@@ -51,24 +49,72 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "No users watching today's airing anime." });
     }
 
-    // 5. Gather required metadata (Posters and Push Subscriptions)
+    // 5. Gather required metadata
     const uniqueUserIds = [...new Set(watchingEntries.map(e => e.user_id))];
+    const uniqueAiringMalIds = [...new Set(watchingEntries.map(e => e.mal_id))]; // Only the ones actually being watched
     
     const [ { data: metadata }, { data: subscriptions } ] = await Promise.all([
-      supabaseAdmin.from("anime_metadata").select("mal_id, poster_url").in("mal_id", airingMalIds),
+      supabaseAdmin.from("anime_metadata").select("mal_id, poster_url, jikan_raw").in("mal_id", uniqueAiringMalIds),
       supabaseAdmin.from("push_subscriptions").select("*").in("user_id", uniqueUserIds)
     ]);
+
+    // --- NEW: FETCH EPISODE NUMBERS ONCE PER ANIME ---
+    const episodeMap: Record<number, number | null> = {};
+    const today = new Date();
+
+    for (const animeId of uniqueAiringMalIds) {
+      let epNum: number | null = null;
+
+      try {
+        // Pause for 1 second to respect Jikan's strict rate limits
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const epRes = await fetch(`https://api.jikan.moe/v4/anime/${animeId}/episodes`);
+        if (epRes.ok) {
+          const { data: epData } = await epRes.json();
+          if (epData && epData.length > 0) {
+            // Find all episodes that aired today or earlier
+            const airedEpisodes = epData.filter((ep: any) => ep.aired && new Date(ep.aired) <= today);
+            if (airedEpisodes.length > 0) {
+              // Get the highest episode number from the aired list
+              epNum = Math.max(...airedEpisodes.map((ep: any) => ep.mal_id));
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch episodes for ${animeId}`, err);
+      }
+
+      // Fallback Math: If Jikan episodes API fails or is empty, calculate based on start date
+      if (epNum === null) {
+        const meta = metadata?.find(m => m.mal_id === animeId);
+        const airedFrom = meta?.jikan_raw?.aired?.from;
+        
+        if (airedFrom) {
+          const startDate = new Date(airedFrom);
+          if (startDate <= today) {
+            // Count milliseconds between dates, convert to weeks, add 1
+            const diffTime = Math.abs(today.getTime() - startDate.getTime());
+            const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+            epNum = diffWeeks + 1;
+          }
+        }
+      }
+
+      episodeMap[animeId] = epNum;
+    }
 
     let inAppCreated = 0;
     let pushesSent = 0;
     let pushErrors = 0;
 
-    // 6. Process matches
+    // 6. Process matches and send notifications
     for (const entry of watchingEntries) {
       const meta = metadata?.find(m => m.mal_id === entry.mal_id);
       const posterUrl = meta?.poster_url || null;
+      const epNum = episodeMap[entry.mal_id] || null; // Retrieve the calculated episode
 
-      // --- A. Create In-App Notification (With DB Deduplication) ---
+      // A. Create In-App Notification
       const { data: insertedNotif, error: insertErr } = await supabaseAdmin
         .from("notifications")
         .upsert({
@@ -76,12 +122,12 @@ export async function GET(req: Request) {
           mal_id: entry.mal_id,
           anime_title: entry.title,
           poster_url: posterUrl,
-          // episode_number is naturally null by default
+          episode_number: epNum // Save to DB
         }, { 
-          onConflict: "user_id, mal_id, created_date", // Relies on our new unique constraint
+          onConflict: "user_id, mal_id, created_date",
           ignoreDuplicates: true 
         })
-        .select("id"); // Select ID so we know if it actually inserted or was ignored
+        .select("id");
 
       if (insertErr) {
         console.error(`Failed to insert notification for ${entry.user_id}`, insertErr);
@@ -89,13 +135,19 @@ export async function GET(req: Request) {
         inAppCreated++;
       }
 
-      // --- B. Send Web Push Notification ---
+      // B. Send Web Push Notification
       const userSubs = subscriptions?.filter(s => s.user_id === entry.user_id) || [];
       if (userSubs.length > 0) {
+        
+        // Construct the specific push text
+        const pushBody = epNum 
+          ? `Episode ${epNum} of ${entry.title} is out now!` 
+          : `${entry.title} — New episode out today!`;
+
         const payload = JSON.stringify({
           title: entry.title,
-          body: "New episode out today!",
-          icon: posterUrl || "/file.svg", // Fallback to a default icon if missing
+          body: pushBody,
+          icon: posterUrl || "/file.svg",
           data: { url: `/anime/${entry.mal_id}` }
         });
 
@@ -107,9 +159,7 @@ export async function GET(req: Request) {
             }, payload);
             pushesSent++;
           } catch (err: any) {
-            console.error(`Push failed for ${sub.user_id}:`, err?.statusCode);
             pushErrors++;
-            // Optional: If err.statusCode === 410 (Gone), delete the subscription from DB
             if (err.statusCode === 410 || err.statusCode === 404) {
                await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
             }

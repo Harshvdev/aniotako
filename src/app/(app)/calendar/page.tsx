@@ -35,40 +35,46 @@ const getSafeDateString = (d: Date) => {
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(() => getSafeDateString(new Date()));
   const [animeList, setAnimeList] = useState<CalendarEntry[]>([]);
+  
+  // UI States
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0); // Used to trigger manual retries
+  
   const [dots, setDots] = useState<Record<string, boolean>>({});
-
   const todayStr = getSafeDateString(new Date());
 
-  // Fetch the selected date's anime
+  // 1. Fetch the selected date's anime
   useEffect(() => {
     if (!selectedDate || selectedDate.includes("NaN")) return; 
 
     const fetchSchedule = async () => {
       setIsLoading(true);
+      setError(null); // Clear previous errors
+      
       try {
         const res = await fetch(`/api/calendar?date=${selectedDate}`);
-        
-        // THE FIX 1: Check if the response is ACTUALLY JSON before parsing. 
-        // This prevents crashes if Supabase times out and redirects to the HTML login page.
         const contentType = res.headers.get("content-type");
+        
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
-          throw new Error("API returned non-JSON response (likely a timeout or redirect)"); 
+          throw new Error("Connection timed out. Please check your network and try again."); 
         }
         
         const json = await res.json();
         setAnimeList(json.data || []);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to load schedule:", err);
+        setError(err.message || "An unexpected error occurred.");
         setAnimeList([]); 
       } finally {
         setIsLoading(false);
       }
     };
+    
     fetchSchedule();
-  }, [selectedDate]);
+  }, [selectedDate, retryCount]); // Re-runs if date changes OR retry button is clicked
 
-  // Fetch the whole week on mount to populate the "dots"
+  // 2. Fetch the whole week on mount for dots
   useEffect(() => {
     const fetchWeekDots = async () => {
       const today = new Date();
@@ -90,14 +96,12 @@ export default function CalendarPage() {
         try {
           const res = await fetch(`/api/calendar?date=${dayStr}`);
           const contentType = res.headers.get("content-type");
-          
-          // THE FIX 1 (Continued): Apply the same safety check here
           if (res.ok && contentType && contentType.includes("application/json")) {
             const json = await res.json();
             newDots[dayStr] = json.data && json.data.length > 0;
           }
         } catch (e) {
-          // Silent catch for background dots
+          // Background dots fail silently so they don't disrupt the user
         }
         await new Promise(resolve => setTimeout(resolve, 400));
       }
@@ -107,7 +111,7 @@ export default function CalendarPage() {
     fetchWeekDots();
   }, []);
 
-  // Generate Week Strip UI array
+  // 3. Generate Week Strip UI
   const buildStripDays = () => {
     const [y, m, d] = selectedDate.split('-').map(Number);
     if (!y || !m || !d) return [];
@@ -137,11 +141,10 @@ export default function CalendarPage() {
       
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Schedule</h1>
-          <p className="text-sm text-zinc-400 mt-1">Track airing times for your watchlist.</p>
+          <h1 className="text-3xl font-black text-white tracking-tight">Weekly Schedule</h1>
+          <p className="text-sm text-zinc-400 mt-1">Current airing times for your watchlist.</p>
         </div>
         
-        {/* Date Picker Input */}
         <div className="relative">
           <input 
             type="date" 
@@ -152,7 +155,6 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* THE FIX 2: Added `gap-2` instead of `justify-between` for proper mobile card spacing */}
       <div className="flex gap-2 sm:gap-4 mb-10 overflow-x-auto custom-scrollbar pb-2 px-1">
         {stripDays.map((d) => {
           const isSelected = d.dateStr === selectedDate;
@@ -161,7 +163,6 @@ export default function CalendarPage() {
             <button
               key={d.dateStr}
               onClick={() => setSelectedDate(d.dateStr)}
-              // Added shrink-0 so they don't squish when overflowing
               className={`flex flex-col items-center justify-center min-w-[3.5rem] sm:min-w-[4rem] py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all shrink-0 ${
                 isSelected 
                   ? "bg-gradient-to-b from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] border border-transparent" 
@@ -170,8 +171,6 @@ export default function CalendarPage() {
             >
               <span className="text-[10px] font-bold uppercase tracking-widest">{d.dayName}</span>
               <span className="text-lg sm:text-xl font-black mt-1">{d.dayNum}</span>
-              
-              {/* The Dot */}
               <div className="h-1.5 mt-1.5 flex items-center justify-center">
                 {hasAnime && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-cyan-500"}`}></span>}
               </div>
@@ -180,19 +179,29 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* Results Header */}
       <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">
         {selectedDate === todayStr ? "Airing Today" : "Scheduled Anime"}
       </h2>
 
-      {/* Results List */}
+      {/* --- EXPLICIT ERROR STATE WITH RETRY BUTTON --- */}
       {isLoading ? (
         <div className="py-20 flex justify-center">
           <div className="w-8 h-8 border-4 border-zinc-800 border-t-fuchsia-500 rounded-full animate-spin"></div>
         </div>
+      ) : error ? (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center animate-in fade-in zoom-in-95">
+          <svg className="w-10 h-10 text-red-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <p className="text-red-400 font-medium mb-6">{error}</p>
+          <button 
+            onClick={() => setRetryCount(c => c + 1)} 
+            className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg"
+          >
+            Retry Connection
+          </button>
+        </div>
       ) : animeList.length === 0 ? (
         <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-10 text-center">
-          <p className="text-zinc-500 font-medium">No anime from your list airing on this day.</p>
+          <p className="text-zinc-500 font-medium">No anime from your list scheduled for this day.</p>
           <button onClick={() => setSelectedDate(todayStr)} className="mt-4 text-sm font-bold text-cyan-400 hover:text-cyan-300 transition-colors">
             Return to Today
           </button>
@@ -221,13 +230,14 @@ export default function CalendarPage() {
                   {anime.title}
                 </h3>
                 
-                <div className="flex items-center justify-between mt-2">
+                {/* --- CLARIFIED UI: Broadcast Time & User Progress --- */}
+                <div className="flex flex-col mt-2 gap-1">
                   <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    {anime.time}
+                    Broadcast: {anime.time}
                   </span>
-                  <span className="text-xs font-mono font-bold text-zinc-500">
-                    Ep {anime.watched_episodes} <span className="opacity-50">/ {anime.total_episodes || '?'}</span>
+                  <span className="text-[10px] sm:text-xs text-zinc-500 font-medium">
+                    Your Progress: <span className="font-mono font-bold text-zinc-300">{anime.watched_episodes}</span> <span className="opacity-50">/ {anime.total_episodes || '?'}</span>
                   </span>
                 </div>
               </div>

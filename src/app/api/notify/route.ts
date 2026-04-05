@@ -71,12 +71,23 @@ export async function GET(req: Request) {
         
         const epRes = await fetch(`https://api.jikan.moe/v4/anime/${animeId}/episodes`);
         if (epRes.ok) {
-          const { data: epData } = await epRes.json();
-          if (epData && epData.length > 0) {
-            // Find all episodes that aired today or earlier
-            const airedEpisodes = epData.filter((ep: any) => ep.aired && new Date(ep.aired) <= today);
+          const { data: epData, pagination } = await epRes.json();
+          
+          let targetData = epData;
+
+          // THE FIX: If there are multiple pages (like One Piece), fetch the LAST page!
+          if (pagination && pagination.last_visible_page > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Pause for rate limit
+            const lastPageRes = await fetch(`https://api.jikan.moe/v4/anime/${animeId}/episodes?page=${pagination.last_visible_page}`);
+            if (lastPageRes.ok) {
+              const lastPageJson = await lastPageRes.json();
+              targetData = lastPageJson.data;
+            }
+          }
+
+          if (targetData && targetData.length > 0) {
+            const airedEpisodes = targetData.filter((ep: any) => ep.aired && new Date(ep.aired) <= today);
             if (airedEpisodes.length > 0) {
-              // Get the highest episode number from the aired list
               epNum = Math.max(...airedEpisodes.map((ep: any) => ep.mal_id));
             }
           }

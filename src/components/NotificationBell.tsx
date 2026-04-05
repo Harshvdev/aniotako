@@ -150,7 +150,7 @@ export default function NotificationBell() {
 
       {/* DROPDOWN PANEL */}
       {isOpen && (
-        <div className="fixed top-[72px] inset-x-0 w-full sm:absolute sm:top-full sm:right-0 sm:mt-2 sm:w-96 max-h-[80vh] overflow-y-auto bg-zinc-900 border-b border-x sm:border border-zinc-800 rounded-b-2xl sm:rounded-xl shadow-2xl z-[60] origin-top flex flex-col custom-scrollbar">
+        <div className="fixed top-[70px] inset-x-4 w-auto sm:absolute sm:top-full sm:inset-x-auto sm:right-0 sm:mt-2 sm:w-96 max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl z-[60] custom-scrollbar">
           
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-950/50">

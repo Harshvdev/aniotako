@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 
 export interface WatchlistEntry {
   id: string;
@@ -23,11 +24,13 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
   const [anime, setAnime] = useState<WatchlistEntry>(entry);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   
   const scoreRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     function handleClickOutside(event: MouseEvent) {
       if (scoreRef.current && !scoreRef.current.contains(event.target as Node)) setIsScoreOpen(false);
       if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) setIsOptionsOpen(false);
@@ -84,10 +87,9 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
   const formatStatus = (status: string) => status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 
   return (
-    <div className="group flex flex-col bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-600 transition-colors shadow-lg relative">
+    <div className="group flex flex-col bg-zinc-900/40 border border-zinc-800/80 rounded-xl sm:rounded-2xl overflow-hidden hover:border-zinc-600 transition-colors shadow-lg relative w-full">
       
-      <div className="relative aspect-[2/3] w-full bg-zinc-800/50 overflow-hidden">
-        {/* THE FIX: Poster is now a clickable link routing to the detail page */}
+      <div className="relative aspect-[2/3] w-full bg-zinc-800/50 overflow-hidden shrink-0">
         <Link href={`/anime/${anime.mal_id}`} className="absolute inset-0 z-0 block">
           {anime.poster_url ? (
             <img 
@@ -102,17 +104,17 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           )}
         </Link>
 
-        {/* Score Selector (z-10 keeps it clickable over the link) */}
-        <div className="absolute top-2 right-2 z-10" ref={scoreRef}>
+        {/* Score Selector: Top Left (Always Visible) */}
+        <div className="absolute top-2 left-2 z-10" ref={scoreRef}>
           <button 
             onClick={(e) => { e.preventDefault(); setIsScoreOpen(!isScoreOpen); }}
-            className="px-2 py-1 bg-black/70 backdrop-blur-md rounded-md text-xs font-black text-amber-400 border border-white/10 shadow-md hover:bg-black/90 transition-colors flex items-center gap-1"
+            className="px-2 py-1 bg-black/80 backdrop-blur-md rounded-md text-xs sm:text-sm font-black text-amber-400 border border-white/10 shadow-md hover:bg-black/90 transition-colors flex items-center gap-1"
           >
             ★ {anime.score || "-"}
           </button>
 
           {isScoreOpen && (
-            <div className="absolute top-full right-0 mt-1 w-32 max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-20 grid grid-cols-5 p-1 gap-1 custom-scrollbar">
+            <div className="absolute top-full left-0 mt-1 w-32 max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-20 grid grid-cols-5 p-1 gap-1 custom-scrollbar">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                 <button
                   key={num}
@@ -130,31 +132,25 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           )}
         </div>
 
-        {/* Options Menu (z-10 keeps it clickable) */}
-        <div className="absolute top-2 left-2 z-10" ref={optionsRef}>
+        {/* Options Menu: Top Right (Always Visible) */}
+        <div className="absolute top-2 right-2 z-10" ref={optionsRef}>
           <button 
             onClick={(e) => { e.preventDefault(); setIsOptionsOpen(!isOptionsOpen); }}
-            className="w-7 h-7 bg-black/70 backdrop-blur-md rounded-md text-white border border-white/10 shadow-md flex items-center justify-center hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="w-8 h-8 sm:w-7 sm:h-7 bg-black/80 backdrop-blur-md rounded-md text-white border border-white/10 shadow-md flex items-center justify-center hover:bg-black/90 transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+            <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
           </button>
 
           {isOptionsOpen && (
             <>
-              {/* Mobile Backdrop (Closes menu when tapping outside the sheet) */}
-              <div 
-                className="fixed inset-0 bg-black/60 z-[65] sm:hidden backdrop-blur-sm" 
-                onClick={(e) => { e.preventDefault(); setIsOptionsOpen(false); }} 
-              />
-              
-              {/* Responsive Panel: Bottom Sheet on Mobile, Dropdown on Desktop */}
-              <div className="fixed inset-x-0 bottom-0 sm:absolute sm:bottom-auto sm:top-full sm:left-0 sm:mt-1 w-full sm:w-40 max-h-[80vh] overflow-y-auto bg-zinc-900 border-t sm:border border-zinc-700 rounded-t-2xl sm:rounded-xl shadow-[0_-20px_40px_rgba(0,0,0,0.6)] sm:shadow-2xl z-[70] py-4 sm:py-1 animate-in slide-in-from-bottom-full sm:slide-in-from-top-2 pb-8 sm:pb-1">
+              {/* Desktop Dropdown */}
+              <div className="hidden sm:block absolute top-full right-0 mt-1 w-40 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 py-1">
                 <div className="px-4 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Status</div>
                 {["watching", "completed", "on_hold", "dropped", "plan_to_watch"].map((s) => (
                   <button
                     key={s}
                     onClick={(e) => { e.preventDefault(); handleUpdate({ status: s }); setIsOptionsOpen(false); }}
-                    className={`w-full text-left px-6 sm:px-4 py-3 sm:py-2 text-sm sm:text-xs hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
+                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
                   >
                     {formatStatus(s)}
                   </button>
@@ -168,55 +164,90 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
                       setIsOptionsOpen(false);
                     }
                   }}
-                  className="w-full text-left px-6 sm:px-4 py-3 sm:py-2 text-sm sm:text-xs text-red-400 hover:bg-zinc-800"
+                  className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-zinc-800"
                 >
                   Remove from list
                 </button>
               </div>
+
+              {/* Mobile Bottom Sheet (Portaled to document body to break out of card's overflow hidden) */}
+              {mounted && createPortal(
+                <div className="sm:hidden">
+                  <div 
+                    className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm" 
+                    onClick={(e) => { e.preventDefault(); setIsOptionsOpen(false); }} 
+                  />
+                  <div className="fixed inset-x-0 bottom-0 w-full max-h-[80vh] overflow-y-auto bg-zinc-900 border-t border-zinc-700 rounded-t-2xl shadow-[0_-20px_40px_rgba(0,0,0,0.6)] z-[101] py-4 animate-in slide-in-from-bottom-full pb-8 custom-scrollbar">
+                    <div className="px-6 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Status</div>
+                    {["watching", "completed", "on_hold", "dropped", "plan_to_watch"].map((s) => (
+                      <button
+                        key={s}
+                        onClick={(e) => { e.preventDefault(); handleUpdate({ status: s }); setIsOptionsOpen(false); }}
+                        className={`w-full text-left px-6 py-4 text-base hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
+                      >
+                        {formatStatus(s)}
+                      </button>
+                    ))}
+                    <div className="border-t border-zinc-800 my-2"></div>
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if(window.confirm("Remove this anime from your list?")) {
+                          onRemove?.(anime.id); 
+                          setIsOptionsOpen(false);
+                        }
+                      }}
+                      className="w-full text-left px-6 py-4 text-base text-red-400 hover:bg-zinc-800"
+                    >
+                      Remove from list
+                    </button>
+                  </div>
+                </div>,
+                document.body
+              )}
             </>
           )}
         </div>
       </div>
 
-      <div className="p-4 flex flex-col flex-1 z-10">
-        <div className="mb-3">
-          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase border ${getStatusColor(anime.status)} mb-2 transition-colors`}>
+      <div className="p-3 sm:p-4 flex flex-col flex-1 z-10 bg-zinc-900/40">
+        <div className="mb-2 sm:mb-3">
+          <span className={`inline-block px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded text-[9px] sm:text-[10px] font-bold tracking-widest uppercase border ${getStatusColor(anime.status)} mb-1.5 sm:mb-2 transition-colors`}>
             {formatStatus(anime.status)}
           </span>
-          {/* THE FIX: Title is now a clickable link */}
           <Link href={`/anime/${anime.mal_id}`} className="block group-hover:text-cyan-400 transition-colors">
-            <h3 className="font-semibold text-sm line-clamp-2 leading-snug cursor-pointer" title={anime.title}>
+            <h3 className="font-semibold text-[12px] sm:text-sm line-clamp-2 leading-snug cursor-pointer" title={anime.title}>
               {anime.title}
             </h3>
           </Link>
         </div>
 
-        <div className="mt-auto">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-zinc-500 font-medium">Progress</span>
+        <div className="mt-auto pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-1 sm:mb-2">
+            <span className="text-[10px] sm:text-xs text-zinc-500 font-medium">Progress</span>
             
-            <div className="flex items-center gap-2 bg-zinc-950 rounded-lg p-1 border border-zinc-800">
+            <div className="flex items-center gap-1 sm:gap-2 bg-zinc-950 rounded-lg p-1 border border-zinc-800 self-start sm:self-auto">
               <button 
                 onClick={decrementEpisode}
                 disabled={anime.watched_episodes <= 0}
-                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 transition-colors text-zinc-300"
+                className="w-6 h-6 sm:w-6 sm:h-6 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 transition-colors text-zinc-300 shrink-0"
               >
                 -
               </button>
-              <span className="font-mono font-bold text-zinc-200 min-w-[3ch] text-center">
+              <span className="font-mono font-bold text-zinc-200 min-w-[3ch] text-center text-xs sm:text-sm">
                 {anime.watched_episodes}
               </span>
               <button 
                 onClick={incrementEpisode}
                 disabled={!!(anime.total_episodes && anime.watched_episodes >= anime.total_episodes)}
-                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 transition-colors text-zinc-300"
+                className="w-6 h-6 sm:w-6 sm:h-6 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 transition-colors text-zinc-300 shrink-0"
               >
                 +
               </button>
             </div>
           </div>
 
-          <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div className="w-full h-1 sm:h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1.5 sm:mt-0">
             <div 
               className="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-500 rounded-full transition-all duration-300"
               style={{ width: anime.total_episodes ? `${Math.min((anime.watched_episodes / anime.total_episodes) * 100, 100)}%` : '0%' }}
@@ -224,7 +255,6 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           </div>
         </div>
       </div>
-
     </div>
   );
 }

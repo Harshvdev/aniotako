@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import ConfirmModal from "./ConfirmModal";
 
 export interface WatchlistEntry {
   id: string;
@@ -21,26 +22,44 @@ interface AnimeCardProps {
   onRemove?: (id: string) => void;
 }
 
-
 export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
   const { getTitle } = useTitleLanguage();
   const [anime, setAnime] = useState<WatchlistEntry>(entry);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   
   const scoreRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   
+  // THE FIX: We MUST track the portal so clicks inside it aren't treated as "outside" clicks
+  const portalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
-    function handleClickOutside(event: MouseEvent) {
-      if (scoreRef.current && !scoreRef.current.contains(event.target as Node)) setIsScoreOpen(false);
-      if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) setIsOptionsOpen(false);
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (scoreRef.current && !scoreRef.current.contains(event.target as Node)) {
+        setIsScoreOpen(false);
+      }
+      
+      // THE FIX: Check if the click was inside the options menu OR inside the mobile portal
+      if (
+        optionsRef.current && 
+        !optionsRef.current.contains(event.target as Node) &&
+        (!portalRef.current || !portalRef.current.contains(event.target as Node))
+      ) {
+        setIsOptionsOpen(false);
+      }
     }
+    
+    // THE FIX: Listen for touchstart to catch mobile taps immediately
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   const handleUpdate = async (updates: Partial<WatchlistEntry>) => {
@@ -89,6 +108,13 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
   };
 
   const formatStatus = (status: string) => status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+
+  const handleConfirmRemove = () => {
+    setIsConfirmModalOpen(false);
+    if (onRemove) {
+      onRemove(anime.id);
+    }
+  };
 
   return (
     <div className="group flex flex-col bg-zinc-900/40 border border-zinc-800/80 rounded-xl sm:rounded-2xl overflow-hidden hover:border-zinc-600 transition-colors shadow-lg relative w-full">
@@ -163,10 +189,8 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
-                    if(window.confirm("Remove this anime from your list?")) {
-                      onRemove?.(anime.id); 
-                      setIsOptionsOpen(false);
-                    }
+                    setIsConfirmModalOpen(true);
+                    setIsOptionsOpen(false);
                   }}
                   className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-zinc-800"
                 >
@@ -174,19 +198,24 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
                 </button>
               </div>
 
-              {/* Mobile Bottom Sheet (Portaled to document body to break out of card's overflow hidden) */}
+              {/* Mobile Bottom Sheet (Portaled to document body) */}
               {mounted && createPortal(
-                <div className="sm:hidden">
+                <div className="sm:hidden" ref={portalRef}>
                   <div 
                     className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm" 
-                    onClick={(e) => { e.preventDefault(); setIsOptionsOpen(false); }} 
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOptionsOpen(false); }} 
                   />
                   <div className="fixed inset-x-0 bottom-0 w-full max-h-[80vh] overflow-y-auto bg-zinc-900 border-t border-zinc-700 rounded-t-2xl shadow-[0_-20px_40px_rgba(0,0,0,0.6)] z-[101] py-4 animate-in slide-in-from-bottom-full pb-8 custom-scrollbar">
                     <div className="px-6 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Status</div>
                     {["watching", "completed", "on_hold", "dropped", "plan_to_watch"].map((s) => (
                       <button
                         key={s}
-                        onClick={(e) => { e.preventDefault(); handleUpdate({ status: s }); setIsOptionsOpen(false); }}
+                        onClick={(e) => { 
+                          e.preventDefault(); 
+                          e.stopPropagation(); 
+                          handleUpdate({ status: s }); 
+                          setIsOptionsOpen(false); 
+                        }}
                         className={`w-full text-left px-6 py-4 text-base hover:bg-zinc-800 ${anime.status === s ? 'text-cyan-400 font-bold' : 'text-zinc-300'}`}
                       >
                         {formatStatus(s)}
@@ -196,10 +225,9 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
                     <button 
                       onClick={(e) => {
                         e.preventDefault();
-                        if(window.confirm("Remove this anime from your list?")) {
-                          onRemove?.(anime.id); 
-                          setIsOptionsOpen(false);
-                        }
+                        e.stopPropagation();
+                        setIsConfirmModalOpen(true);
+                        setIsOptionsOpen(false);
                       }}
                       className="w-full text-left px-6 py-4 text-base text-red-400 hover:bg-zinc-800"
                     >
@@ -259,6 +287,17 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
           </div>
         </div>
       </div>
+
+      {/* Render the Custom Modal at the root level of the card */}
+      <ConfirmModal 
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={handleConfirmRemove}
+        title="Remove Anime"
+        description="Are you sure you want to remove this anime from your list?"
+        confirmLabel="Remove"
+        isDestructive={true}
+      />
     </div>
   );
 }

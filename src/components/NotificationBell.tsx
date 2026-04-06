@@ -14,7 +14,6 @@ interface Notification {
   poster_url: string | null;
   is_read: boolean;
   created_at: string;
-  // THE FIX: Added metadata interface to receive the stitched data from the API
   anime_metadata?: {
     title_english?: string | null;
     title_romaji?: string | null;
@@ -43,7 +42,6 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // THE FIX: Import the hook
   const { getTitle } = useTitleLanguage();
   
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -86,7 +84,16 @@ export default function NotificationBell() {
         },
         (payload) => {
           const newNotif = payload.new as Notification;
-          setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
+          
+          // THE FIX: Try to guess the english title based on previous notifications for the same anime
+          setNotifications((prev) => {
+            const existing = prev.find(n => n.mal_id === newNotif.mal_id);
+            if (existing && existing.anime_metadata) {
+               newNotif.anime_metadata = existing.anime_metadata;
+            }
+            return [newNotif, ...prev].slice(0, 20);
+          });
+          
           setUnreadCount((prev) => prev + 1);
         }
       )
@@ -166,7 +173,6 @@ export default function NotificationBell() {
               <div className="flex flex-col">
                 {notifications.map((notif) => {
                   
-                  // THE FIX: Format the title using our global context helper!
                   const displayTitle = getTitle({
                     title: notif.anime_title,
                     title_english: notif.anime_metadata?.title_english,

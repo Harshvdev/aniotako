@@ -15,6 +15,8 @@ export interface WatchlistEntry {
   watched_episodes: number;
   total_episodes: number | null;
   poster_url: string | null;
+  title_english?: string | null;
+  title_romaji?: string | null;
 }
 
 interface AnimeCardProps {

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 
 interface Props {
   anime: any;
@@ -16,6 +17,8 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedSyn, setExpandedSyn] = useState(false);
   const [activeTab, setActiveTab] = useState("related"); // Default tab
+
+  const { getTitle } = useTitleLanguage();
   
   const [episodes, setEpisodes] = useState<any[]>([]);
   const [characters, setCharacters] = useState<any[]>([]);
@@ -137,7 +140,13 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
 
         {/* Right Column: Details */}
         <div className="flex-1 pt-2 md:pt-16">
-          <h1 className="text-3xl md:text-5xl font-extrabold text-white leading-tight drop-shadow-lg">{anime.title}</h1>
+          <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+            {getTitle({ 
+              title: anime.title, 
+              title_english: anime.title_english, 
+              title_romaji: anime.title 
+            })}
+          </h1>
           {anime.title_japanese && <h2 className="text-zinc-400 text-lg md:text-xl font-medium mt-1">{anime.title_japanese}</h2>}
 
           {/* Quick Stats Banner */}

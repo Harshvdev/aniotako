@@ -17,6 +17,8 @@ export interface WatchlistEntry {
   total_episodes: number | null;
   poster_url: string | null;
   created_at: string;
+  title_english?: string | null;
+  title_romaji?: string | null;
   anime_metadata?: {
     genres: string[];
     year: number | null;

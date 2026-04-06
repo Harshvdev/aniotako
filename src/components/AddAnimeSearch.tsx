@@ -298,8 +298,8 @@ export default function AddAnimeSearch() {
             >
               <img src={anime.images.jpg.image_url} alt={anime.title} className="w-12 h-16 object-cover rounded bg-zinc-800 shrink-0" />
               <div className="flex-1 min-w-0">
-                <h4 className="text-white font-medium text-sm truncate" title={getTitle(anime)}>
-                  {getTitle(anime)}
+                <h4 className="text-white font-medium text-sm truncate" title={getTitle({ title: anime.title, title_english: anime.title_english, title_romaji: anime.title })}>
+                  {getTitle({ title: anime.title, title_english: anime.title_english, title_romaji: anime.title })}
                 </h4>
                 <div className="text-xs text-zinc-500 flex items-center gap-2 mt-1">
                   <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-[10px] text-zinc-300 font-bold">{anime.type}</span>

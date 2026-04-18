@@ -4,11 +4,19 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import SignOutButton from "@/components/SignOutButton";
 
-export default function UserDropdown({ email }: { email: string | undefined }) {
+// THE FIX: Added displayName and avatarInitial to the component props
+export default function UserDropdown({ 
+  email, 
+  displayName, 
+  avatarInitial 
+}: { 
+  email: string | undefined;
+  displayName: string;
+  avatarInitial: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close the dropdown if the user clicks anywhere outside of it
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -27,17 +35,20 @@ export default function UserDropdown({ email }: { email: string | undefined }) {
         className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
       >
         <span className="text-sm text-zinc-400 truncate max-w-[120px] md:max-w-xs hidden sm:block">
-          {email}
+          {displayName}
         </span>
         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-sm shadow-inner shrink-0">
-          {email?.charAt(0).toUpperCase() || "U"}
+          {avatarInitial}
         </div>
       </button>
 
       {/* The Dropdown Menu */}
       {isOpen && (
         <div className="absolute right-0 top-full mt-2 w-48 min-w-[200px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl py-2 shadow-2xl z-[60] animate-in fade-in slide-in-from-top-2 origin-top-right custom-scrollbar">
-          <div className="px-4 py-2 mb-1 sm:hidden">
+          
+          {/* THE FIX: Show both the Display Name and Email in the dropdown header */}
+          <div className="px-4 py-2 mb-1 border-b border-zinc-800/50">
+            <p className="text-sm font-bold text-white truncate">{displayName}</p>
             <p className="text-xs text-zinc-500 truncate">{email}</p>
           </div>
           

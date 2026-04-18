@@ -26,6 +26,7 @@ export default function SettingsPage() {
   // --- State ---
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
   const { titleLanguage, setTitleLanguage } = useTitleLanguage();
 
   // Account
@@ -64,14 +65,11 @@ export default function SettingsPage() {
         supabase.from("user_preferences").select("*").eq("user_id", user.id).single()
       ]);
 
-      
-      if (profile) setDisplayName(profile.display_name || "");
       if (profile) setDisplayName(profile.display_name || "");
       if (prefs) {
         setNotifyWatchingOnly(prefs.notify_watching_only);
         setEmailNotify(prefs.email_notifications);
         setShowAdult(prefs.show_adult);
-        
       } else {
         // If trigger hasn't fired yet for some reason, create it
         await supabase.from("user_preferences").upsert({ user_id: user.id });
@@ -103,12 +101,27 @@ export default function SettingsPage() {
   };
 
   const handleSaveProfile = async () => {
+    // 1. Client-Side Guards (These trigger the toast immediately)
+    if (!displayName.trim()) {
+      return showToast("Display name cannot be empty", "error");
+    }
+    if (displayName.length > 30) {
+      return showToast("Display name must be 30 characters or less", "error");
+    }
+
     setIsSavingProfile(true);
     try {
       const res = await fetch("/api/profile", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: displayName })
       });
-      if (!res.ok) throw new Error("Failed to save profile");
+      
+      const data = await res.json();
+      
+      // 2. Server-Side Error Handling
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save profile");
+      }
+      
       showToast("Profile updated successfully!");
       router.refresh();
     } catch (e: any) {
@@ -122,12 +135,11 @@ export default function SettingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    // Optimistic UI (We check if it's a boolean to keep TypeScript happy)
+    // Optimistic UI
     if (key === "notify_watching_only" && typeof value === "boolean") setNotifyWatchingOnly(value);
     if (key === "email_notifications" && typeof value === "boolean") setEmailNotify(value);
     if (key === "show_adult" && typeof value === "boolean") setShowAdult(value);
 
-    // Save to database
     await supabase.from("user_preferences").update({ [key]: value }).eq("user_id", user.id);
     showToast("Preferences saved.");
   };
@@ -151,7 +163,7 @@ export default function SettingsPage() {
         // Unsubscribe
         const sub = await registration.pushManager.getSubscription();
         if (sub) await sub.unsubscribe();
-        await fetch("/api/push/unsubscribe", { method: "POST" }); // Optional: cleanup route if you built one
+        await fetch("/api/push/unsubscribe", { method: "POST" });
         setIsSubscribed(false);
         showToast("Push notifications disabled.");
       } else {
@@ -205,17 +217,40 @@ export default function SettingsPage() {
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Account</h2>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg">
           <div>
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Display Name</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                Display Name
+              </label>
+              {/* Counter turns red if over 30 */}
+              <span className={`text-xs font-bold transition-colors ${displayName.length > 30 ? 'text-red-400' : 'text-zinc-600'}`}>
+                {displayName.length} / 30
+              </span>
+            </div>
+            
             <div className="flex flex-col sm:flex-row gap-3 items-start">
-              <input 
-                type="text" 
-                value={displayName} 
-                onChange={e => setDisplayName(e.target.value)}
-                className="w-full sm:flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-500 focus:outline-none"
-              />
-              {/* THE FIX: A strict structural wrapper to contain the AsyncButton's width */}
+              <div className="w-full sm:flex-1">
+                <input 
+                  type="text" 
+                  value={displayName} 
+                  onChange={e => setDisplayName(e.target.value)}
+                  className={`w-full bg-zinc-950 border rounded-xl px-4 py-2.5 text-white focus:outline-none transition-colors ${
+                    displayName.length > 30 ? 'border-red-500 focus:border-red-500' : 'border-zinc-800 focus:border-cyan-500'
+                  }`}
+                  placeholder="Enter your name..."
+                />
+                {/* Visual warning message */}
+                {displayName.length > 30 && (
+                  <p className="text-xs text-red-400 mt-2 font-medium animate-in fade-in slide-in-from-top-1">
+                    Display name must be 30 characters or less.
+                  </p>
+                )}
+              </div>
               <div className="w-full sm:w-auto shrink-0">
-                <AsyncButton onClick={handleSaveProfile} className="w-full px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl disabled:opacity-50">
+                {/* Button remains clickable so the user can trigger the error toast and see why it failed */}
+                <AsyncButton 
+                  onClick={handleSaveProfile} 
+                  className="w-full px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl"
+                >
                   Save
                 </AsyncButton>
               </div>
@@ -236,21 +271,20 @@ export default function SettingsPage() {
       {/* --- NOTIFICATIONS SECTION --- */}
       <section className="mb-12">
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Notifications</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg divide-y divide-zinc-800">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-lg divide-y divide-zinc-800">
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
-            <div className="flex-1">
-              <h3 className="text-white font-bold">Browser Push Notifications</h3>
-              <p className="text-sm text-zinc-400 mt-1">Get instant alerts when new episodes air.</p>
-              {pushPermission === "denied" && <p className="text-xs text-red-400 mt-2">Permission denied. Please enable in your browser settings.</p>}
+          <div className="flex items-center justify-between gap-4 pb-6">
+            <div className="flex-1 min-w-0 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Browser Push Notifications</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Get instant alerts when new episodes air.</p>
+              {pushPermission === "denied" && <p className="text-[10px] sm:text-xs text-red-400 mt-2">Permission denied in browser settings.</p>}
             </div>
             
-            {/* THE FIX: Structural wrapper and dynamic button width */}
-            <div className="w-full sm:w-auto shrink-0">
+            <div className="shrink-0">
               <AsyncButton 
                 onClick={handlePushToggle} 
                 disabled={pushPermission === "denied"}
-                className={`w-full sm:w-auto px-5 py-2.5 sm:py-2 rounded-xl sm:rounded-full text-sm font-bold transition-all ${
+                className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all ${
                   isSubscribed 
                     ? "bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700" 
                     : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50"
@@ -261,11 +295,10 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Added gap-4 and shrink-0 to prevent text from touching the toggles on tiny screens */}
           <div className="flex items-center justify-between gap-4 py-6">
-            <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold">Email Notifications</h3>
-              <p className="text-sm text-zinc-400 mt-1">Receive a weekly digest of airings.</p>
+            <div className="flex-1 min-w-0 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Email Notifications</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Receive a weekly digest of airings.</p>
             </div>
             <div className="shrink-0">
               <ToggleSwitch checked={emailNotify} onChange={(val) => handleUpdatePref("email_notifications", val)} />
@@ -273,9 +306,9 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex items-center justify-between gap-4 pt-6">
-            <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold">Strict Notifications</h3>
-              <p className="text-sm text-zinc-400 mt-1">Only notify me for anime I am currently "Watching".</p>
+            <div className="flex-1 min-w-0 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Strict Notifications</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Only notify me for anime I am currently "Watching".</p>
             </div>
             <div className="shrink-0">
               <ToggleSwitch checked={notifyWatchingOnly} onChange={(val) => handleUpdatePref("notify_watching_only", val)} />
@@ -286,27 +319,25 @@ export default function SettingsPage() {
       </section>
 
       {/* --- LIST PREFERENCES SECTION --- */}
-      {/* --- LIST PREFERENCES SECTION --- */}
       <section className="mb-12">
         <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">List Preferences</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg divide-y divide-zinc-800">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-lg divide-y divide-zinc-800">
           
-          {/* THE NEW FIX: Title Language Toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
             <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold">Title Language</h3>
-              <p className="text-sm text-zinc-400 mt-1">Preferred language for anime titles.</p>
+              <h3 className="text-white font-bold text-sm sm:text-base">Title Language</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Preferred language for anime titles.</p>
             </div>
             <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
               <button 
                 onClick={() => { setTitleLanguage("english"); handleUpdatePref("title_language", "english"); }} 
-                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${titleLanguage === "english" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-bold rounded-md ${titleLanguage === "english" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
               >
                 English
               </button>
               <button 
                 onClick={() => { setTitleLanguage("romaji"); handleUpdatePref("title_language", "romaji"); }} 
-                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${titleLanguage === "romaji" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-bold rounded-md ${titleLanguage === "romaji" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}
               >
                 Romaji
               </button>
@@ -315,24 +346,24 @@ export default function SettingsPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
             <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold">Default View</h3>
-              <p className="text-sm text-zinc-400 mt-1">How your watchlist is displayed on load.</p>
+              <h3 className="text-white font-bold text-sm sm:text-base">Default View</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">How your watchlist is displayed.</p>
             </div>
             <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
-              <button onClick={() => handleLocalPref("aniotako_view", "grid")} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "grid" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>Grid</button>
-              <button onClick={() => handleLocalPref("aniotako_view", "list")} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md ${defaultView === "list" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>List</button>
+              <button onClick={() => handleLocalPref("aniotako_view", "grid")} className={`flex-1 sm:flex-none px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-bold rounded-md ${defaultView === "grid" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>Grid</button>
+              <button onClick={() => handleLocalPref("aniotako_view", "list")} className={`flex-1 sm:flex-none px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-bold rounded-md ${defaultView === "list" ? "bg-zinc-800 text-white" : "text-zinc-500"}`}>List</button>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
             <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold">Default Sort</h3>
-              <p className="text-sm text-zinc-400 mt-1">How your entries are sorted.</p>
+              <h3 className="text-white font-bold text-sm sm:text-base">Default Sort</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">How your entries are sorted.</p>
             </div>
             <select 
               value={defaultSort} 
               onChange={(e) => handleLocalPref("aniotako_sort", e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
+              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
             >
               <option value="Updated">Last Updated</option>
               <option value="Title">Title (A-Z)</option>
@@ -343,8 +374,8 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between gap-4 pt-6">
             <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold flex items-center gap-2">Show Adult Content <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] uppercase rounded border border-red-500/30">18+</span></h3>
-              <p className="text-sm text-zinc-400 mt-1">Include explicit genres (Rx) in search results.</p>
+              <h3 className="text-white font-bold text-sm sm:text-base flex items-center gap-2">Show Adult Content <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] uppercase rounded border border-red-500/30">18+</span></h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Include explicit genres in search.</p>
             </div>
             <div className="shrink-0">
               <ToggleSwitch checked={showAdult} onChange={(val) => handleUpdatePref("show_adult", val)} />
@@ -381,7 +412,6 @@ export default function SettingsPage() {
                   onChange={e => setDeleteInput(e.target.value)}
                   className="w-full sm:flex-1 bg-zinc-950 border border-red-900/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                 />
-                {/* THE FIX: Structural wrapper */}
                 <div className="w-full sm:w-auto shrink-0">
                   <AsyncButton 
                     onClick={handleDeleteAll}
@@ -420,7 +450,6 @@ export default function SettingsPage() {
   );
 }
 
-// --- Reusable UI Component ---
 function ToggleSwitch({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) {
   return (
     <button 

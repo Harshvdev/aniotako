@@ -20,11 +20,22 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  // THE FIX: Fetch the user's profile to get the display_name
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .single();
+
+  // THE FIX: Fallback logic (Display Name -> Email Prefix -> "User")
+  const emailPrefix = user.email ? user.email.split('@')[0] : "User";
+  const displayName = profile?.display_name || emailPrefix;
+  const avatarInitial = displayName.charAt(0).toUpperCase();
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 pb-20">
       <NProgressLoader />
       
-      {/* THE FIX: Wrap EVERYTHING inside the Provider so the Navbar components can read the context */}
       <TitleLanguageProvider>
         
         {/* Shared Navigation Bar */}
@@ -55,7 +66,12 @@ export default async function AppLayout({
             {/* Right: User Menu & Notifications */}
             <div className="flex items-center justify-end gap-3 sm:gap-4 flex-1">
               <NotificationBell />
-              <UserDropdown email={user.email} />
+              {/* THE FIX: Pass the new computed props down to the component */}
+              <UserDropdown 
+                email={user.email} 
+                displayName={displayName} 
+                avatarInitial={avatarInitial} 
+              />
             </div>
 
           </div>

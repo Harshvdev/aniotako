@@ -106,7 +106,12 @@ export default function AddAnimeSearch() {
           setShowDropdown(true);
         } else if (res.status === 429) {
            setToast({ message: "Searching too fast! Please wait a moment.", type: "error" });
+        } else {
+           // Add this block to catch 500s and other API failures
+           setToast({ message: "Network timeout. AniList is currently unreachable.", type: "error" });
+           setResults([]);
         }
+
       } catch (err: any) {
         if (err.name !== "AbortError") console.error("Search failed", err);
       } finally {
@@ -157,6 +162,8 @@ export default function AddAnimeSearch() {
         setResults((prev) => [...prev, ...json.data]);
         setHasNextPage(json.pagination.has_next_page);
         setPage(nextPage);
+      } else {
+        setToast({ message: "Failed to load more results. Try again.", type: "error" });
       }
     } catch (err: any) {
       console.error("Failed to load more pages", err);

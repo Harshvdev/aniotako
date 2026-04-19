@@ -1,25 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers, cookies } from "next/headers"; // <-- ADD cookies HERE
 import AnimeDetailClient from "./AnimeDetailClient";
-import https from "https";
 
 export const dynamic = 'force-dynamic';
-
-// Custom IPv4 fetch to prevent Linux IPv6 network crashes
-const fetchIPv4 = (url: string, timeoutMs: number = 5000): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { family: 4 }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); } 
-        catch (e) { reject(e); }
-      });
-    });
-    req.on('error', (err) => reject(err));
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error("Timeout")); });
-  });
-};
 
 export default async function AnimePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -29,7 +13,6 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // 1. Fetch user's personal tracking data
   const { data: watchlistEntry } = await supabase
     .from("watchlist_entries")
     .select("*")
@@ -37,55 +20,39 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     .eq("mal_id", mal_id)
     .single();
 
-  // 2. Check cache for Jikan data
-  const { data: meta } = await supabase
-    .from("anime_metadata")
-    .select("*")
-    .eq("mal_id", mal_id)
-    .single();
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const protocol = host?.includes("localhost") ? "http" : "https";
+  const internalApiUrl = `${protocol}://${host}/api/anilist/anime/${mal_id}`;
+  
+  // Grab the user's session cookies
+  const cookieStore = await cookies();
+  const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const isStale = !meta || !meta.cached_at || new Date(meta.cached_at) < sevenDaysAgo;
-  let jikanData = meta?.jikan_raw;
-
-  // 3. Fetch from Jikan if missing or stale
-  if (isStale || !jikanData) {
-    try {
-      const response = await fetchIPv4(`https://api.jikan.moe/v4/anime/${mal_id}/full`);
-      jikanData = response.data;
-
-      if (jikanData) {
-
-        // Combine all tag types into one deduplicated array
-        const combinedGenres = Array.from(new Set([
-          ...(jikanData.genres || []),
-          ...(jikanData.explicit_genres || []),
-          ...(jikanData.themes || []),
-          ...(jikanData.demographics || [])
-        ].map((g: any) => g.name)));
-
-        await supabase.from("anime_metadata").upsert({
-          mal_id,
-          title: jikanData.title,
-          genres: combinedGenres,
-          type: jikanData.type || "Unknown",
-          season: jikanData.season || null,
-          airing_status: jikanData.status || null,
-          studio: jikanData.studios?.[0]?.name || null,
-          year: jikanData.year || null,
-          total_episodes: jikanData.episodes || null,
-          synopsis: jikanData.synopsis || null,
-          poster_url: jikanData.images?.jpg?.large_image_url || null,
-          cached_at: new Date().toISOString(),
-          jikan_raw: jikanData // Save the massive payload here
-        });
+  let anilistData = null;
+  
+  try {
+    console.log(`[PAGE] Attempting internal fetch to: ${internalApiUrl}`);
+    const res = await fetch(internalApiUrl, { 
+      cache: 'no-store',
+      headers: {
+        'Cookie': cookieString // <-- FORWARD COOKIES HERE
       }
-    } catch (error) {
-      console.error(`Failed to fetch/cache anime ${mal_id}`, error);
+    });
+    
+    if (res.ok) {
+      anilistData = await res.json();
+      console.log(`[PAGE] Internal fetch SUCCESS.`);
+    } else {
+      const errorText = await res.text();
+      console.error(`[PAGE] Internal fetch FAILED with HTTP ${res.status}:`, errorText);
     }
+  } catch (err) {
+    console.error("[PAGE] Internal fetch crashed entirely:", err);
   }
 
-  if (!jikanData) {
+  if (!anilistData || anilistData.error) {
+    console.warn(`[PAGE] Rendering "Not Found" UI. anilistData state:`, anilistData);
     return (
       <div className="flex flex-col items-center justify-center py-32 text-zinc-400">
         <h2 className="text-2xl font-bold text-white mb-2">Anime Not Found</h2>
@@ -94,5 +61,5 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     );
   }
 
-  return <AnimeDetailClient anime={jikanData} initialEntry={watchlistEntry || null} />;
+  return <AnimeDetailClient anime={anilistData} initialEntry={watchlistEntry || null} />;
 }

@@ -31,7 +31,14 @@ export async function proxy(request: NextRequest) {
   );
 
   // 3. Fetch the user to trigger a session refresh if needed
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data?.user || null;
+  } catch (error) {
+    console.error("Middleware DB Connection Failed. Failsafe activated.", error);
+    // If Supabase is entirely unreachable, user remains null (treated as logged out)
+  }
 
   const url = request.nextUrl;
   const path = url.pathname;

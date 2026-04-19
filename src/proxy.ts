@@ -48,8 +48,16 @@ export async function proxy(request: NextRequest) {
 
   // 5. Execute Routing Logic
   if (!user) {
-    // If NOT logged in, and trying to access a protected page or API (except cron)
-    if (isProtectedPath || (isApiRoute && !isCronRoute)) {
+    // FIX 1: Do NOT redirect API requests. Return a 401 JSON error instead.
+    if (isApiRoute && !isCronRoute) {
+      return NextResponse.json(
+        { error: "Unauthorized or session expired" }, 
+        { status: 401 }
+      );
+    }
+
+    // Normal behavior for page routes: Redirect to login
+    if (isProtectedPath) {
       const redirectUrl = url.clone();
       redirectUrl.pathname = "/login";
       redirectUrl.searchParams.set("next", path); 
@@ -60,6 +68,9 @@ export async function proxy(request: NextRequest) {
     if (isAuthPath || path === "/") {
       const redirectUrl = url.clone();
       redirectUrl.pathname = "/watchlist";
+      // FIX 2: Wipe the search parameters so messy redirect queries 
+      // (like ?genres=Harem&next=...) don't bleed into the Watchlist URL
+      redirectUrl.search = ""; 
       return NextResponse.redirect(redirectUrl);
     }
   }

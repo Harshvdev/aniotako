@@ -13,7 +13,9 @@ const TAG_MAP: Record<string, string> = {
   "Shoujo Ai": "Girls Love",
   "Shounen Ai": "Boys Love",
   "Game": "Video Games",
-  "Dementia": "Surreal Comedy"
+  "Dementia": "Surreal Comedy",
+  "Harem": "Female Harem",
+  "Reverse Harem": "Male Harem"
 };
 
 export async function GET(req: Request) {

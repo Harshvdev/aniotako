@@ -4,13 +4,15 @@ import { useState, useEffect } from "react";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 import Link from "next/link";
 
-
 interface CalendarEntry {
   mal_id: number;
+  anilist_id?: number | null;
   title: string;
   poster_url: string;
   format: string;
-  time: string;
+  time?: string;
+  airingAt?: number | null;
+  episode?: number | null;
   total_episodes: number | null;
   status: string;
   watched_episodes: number;
@@ -41,22 +43,32 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(() => getSafeDateString(new Date()));
   const [animeList, setAnimeList] = useState<CalendarEntry[]>([]);
   
-  
-  // UI States
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0); // Used to trigger manual retries
+  const [retryCount, setRetryCount] = useState(0); 
   
   const [dots, setDots] = useState<Record<string, boolean>>({});
+  const [currentWeekStart, setCurrentWeekStart] = useState<string>("");
+  const [userTz, setUserTz] = useState<string>("UTC");
+
   const todayStr = getSafeDateString(new Date());
 
-  // 1. Fetch the selected date's anime
+  // 1. Init Timezone
+  useEffect(() => {
+    setUserTz(
+      localStorage.getItem("aniotako_timezone") || 
+      Intl.DateTimeFormat().resolvedOptions().timeZone || 
+      "UTC"
+    );
+  }, []);
+
+  // 2. Fetch Selected Date
   useEffect(() => {
     if (!selectedDate || selectedDate.includes("NaN")) return; 
 
     const fetchSchedule = async () => {
       setIsLoading(true);
-      setError(null); // Clear previous errors
+      setError(null); 
       
       try {
         const res = await fetch(`/api/calendar?date=${selectedDate}`);
@@ -67,7 +79,16 @@ export default function CalendarPage() {
         }
         
         const json = await res.json();
-        setAnimeList(json.data || []);
+        
+        // Sort ascending by default (early airers first)
+        const sortedData = (json.data || []).sort((a: CalendarEntry, b: CalendarEntry) => {
+          if (a.airingAt && b.airingAt) return a.airingAt - b.airingAt;
+          if (a.airingAt) return -1;
+          if (b.airingAt) return 1;
+          return 0;
+        });
+
+        setAnimeList(sortedData);
       } catch (err: any) {
         console.error("Failed to load schedule:", err);
         setError(err.message || "An unexpected error occurred.");
@@ -78,46 +99,41 @@ export default function CalendarPage() {
     };
     
     fetchSchedule();
-  }, [selectedDate, retryCount]); // Re-runs if date changes OR retry button is clicked
+  }, [selectedDate, retryCount]);
 
-  // 2. Fetch the whole week on mount for dots
+  // 3. Fetch Week Dots (One Query!)
   useEffect(() => {
-    const fetchWeekDots = async () => {
-      const today = new Date();
-      const dayOfWeek = today.getDay(); 
-      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      
-      const monday = new Date(today);
-      monday.setDate(today.getDate() + diffToMonday);
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    if (!y || !m || !d) return;
+    
+    const curr = new Date(y, m - 1, d);
+    const dayOfWeek = curr.getDay(); 
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    
+    const monday = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate() + diffToMonday);
+    const mondayStr = getSafeDateString(monday);
 
-      const weekDays = Array.from({length: 7}, (_, i) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        return getSafeDateString(d);
-      });
-
-      const newDots: Record<string, boolean> = {};
+    // Only fire off the network request if we move into a new calendar week block
+    if (mondayStr !== currentWeekStart) {
+      setCurrentWeekStart(mondayStr);
       
-      for (const dayStr of weekDays) {
+      const fetchWeekDots = async () => {
         try {
-          const res = await fetch(`/api/calendar?date=${dayStr}`);
-          const contentType = res.headers.get("content-type");
-          if (res.ok && contentType && contentType.includes("application/json")) {
+          const res = await fetch(`/api/calendar?date=${mondayStr}&week=true`);
+          if (res.ok) {
             const json = await res.json();
-            newDots[dayStr] = json.data && json.data.length > 0;
+            if (json.dotsByDate) {
+              setDots(prev => ({ ...prev, ...json.dotsByDate }));
+            }
           }
         } catch (e) {
-          // Background dots fail silently so they don't disrupt the user
+          console.error("Failed to load week dots:", e);
         }
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-      setDots(newDots);
-    };
+      };
+      fetchWeekDots();
+    }
+  }, [selectedDate, currentWeekStart]);
 
-    fetchWeekDots();
-  }, []);
-
-  // 3. Generate Week Strip UI
   const buildStripDays = () => {
     const [y, m, d] = selectedDate.split('-').map(Number);
     if (!y || !m || !d) return [];
@@ -141,6 +157,16 @@ export default function CalendarPage() {
   };
 
   const stripDays = buildStripDays();
+
+  // Format UNIX to Local Browser Time with Timezone Abbreviation
+  const getLocalTimeString = (unix: number) => {
+    return new Date(unix * 1000).toLocaleTimeString("en-US", { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: userTz,
+        timeZoneName: 'short'
+    });
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 pb-32 min-h-screen">
@@ -189,7 +215,6 @@ export default function CalendarPage() {
         {selectedDate === todayStr ? "Airing Today" : "Scheduled Anime"}
       </h2>
 
-      {/* --- EXPLICIT ERROR STATE WITH RETRY BUTTON --- */}
       {isLoading ? (
         <div className="py-20 flex justify-center">
           <div className="w-8 h-8 border-4 border-zinc-800 border-t-fuchsia-500 rounded-full animate-spin"></div>
@@ -235,11 +260,14 @@ export default function CalendarPage() {
                   {getTitle(anime)}
                 </h3>
                 
-                {/* --- CLARIFIED UI: Broadcast Time & User Progress --- */}
                 <div className="flex flex-col mt-2 gap-1">
                   <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Broadcast: {anime.time}
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {anime.airingAt && anime.episode ? (
+                      <span className="truncate">Episode {anime.episode} &middot; Airs at {getLocalTimeString(anime.airingAt)}</span>
+                    ) : (
+                      <span className="truncate">Broadcast: {anime.time}</span>
+                    )}
                   </span>
                   <span className="text-[10px] sm:text-xs text-zinc-500 font-medium">
                     Your Progress: <span className="font-mono font-bold text-zinc-300">{anime.watched_episodes}</span> <span className="opacity-50">/ {anime.total_episodes || '?'}</span>

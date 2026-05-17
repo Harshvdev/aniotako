@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import { formatTimeOnly } from "@/lib/timezone";
 import Link from "next/link";
 
 interface CalendarEntry {
@@ -158,16 +159,6 @@ export default function CalendarPage() {
 
   const stripDays = buildStripDays();
 
-  // Format UNIX to Local Browser Time with Timezone Abbreviation
-  const getLocalTimeString = (unix: number) => {
-    return new Date(unix * 1000).toLocaleTimeString("en-US", { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        timeZone: userTz,
-        timeZoneName: 'short'
-    });
-  };
-
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 pb-32 min-h-screen">
       
@@ -264,7 +255,7 @@ export default function CalendarPage() {
                   <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     {anime.airingAt && anime.episode ? (
-                      <span className="truncate">Episode {anime.episode} &middot; Airs at {getLocalTimeString(anime.airingAt)}</span>
+                      <span className="truncate">Episode {anime.episode} &middot; Airs at {formatTimeOnly(anime.airingAt)}</span>
                     ) : (
                       <span className="truncate">Broadcast: {anime.time}</span>
                     )}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import { formatTimeOnly } from "@/lib/timezone";
 
 // Helper for Web Push
 function urlBase64ToUint8Array(base64String: string) {
@@ -42,6 +43,12 @@ export default function SettingsPage() {
   // Preferences (Local Storage)
   const [defaultView, setDefaultView] = useState("grid");
   const [defaultSort, setDefaultSort] = useState("Updated");
+  
+  // Timezone Preference
+  const [timezone, setTimezone] = useState("");
+  const [resolvedTz, setResolvedTz] = useState("");
+  const [tzSuccessMsg, setTzSuccessMsg] = useState("");
+  const tzTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notifications (Web Push)
   const [pushPermission, setPushPermission] = useState<NotificationPermission>("default");
@@ -71,13 +78,18 @@ export default function SettingsPage() {
         setEmailNotify(prefs.email_notifications);
         setShowAdult(prefs.show_adult);
       } else {
-        // If trigger hasn't fired yet for some reason, create it
         await supabase.from("user_preferences").upsert({ user_id: user.id });
       }
 
       // Load LocalStorage
       setDefaultView(localStorage.getItem("aniotako_view") || "grid");
       setDefaultSort(localStorage.getItem("aniotako_sort") || "Updated");
+
+      // Load Timezone
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      setResolvedTz(browserTz);
+      // Use an empty string to represent "Auto-detect"
+      setTimezone(localStorage.getItem("aniotako_timezone") || "");
 
       // Load Push Status
       if ("Notification" in window && "serviceWorker" in navigator) {
@@ -101,7 +113,6 @@ export default function SettingsPage() {
   };
 
   const handleSaveProfile = async () => {
-    // 1. Client-Side Guards (These trigger the toast immediately)
     if (!displayName.trim()) {
       return showToast("Display name cannot be empty", "error");
     }
@@ -117,7 +128,6 @@ export default function SettingsPage() {
       
       const data = await res.json();
       
-      // 2. Server-Side Error Handling
       if (!res.ok) {
         throw new Error(data.error || "Failed to save profile");
       }
@@ -135,7 +145,6 @@ export default function SettingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    // Optimistic UI
     if (key === "notify_watching_only" && typeof value === "boolean") setNotifyWatchingOnly(value);
     if (key === "email_notifications" && typeof value === "boolean") setEmailNotify(value);
     if (key === "show_adult" && typeof value === "boolean") setShowAdult(value);
@@ -151,6 +160,30 @@ export default function SettingsPage() {
     showToast("Layout saved to this browser.");
   };
 
+  const handleTimezoneChange = (val: string) => {
+    setTimezone(val);
+    
+    // If "Auto" is selected, clear the saved preference
+    if (val === "") {
+      localStorage.removeItem("aniotako_timezone");
+    } else {
+      localStorage.setItem("aniotako_timezone", val);
+    }
+    
+    try {
+      const timeToFormat = Math.floor(Date.now() / 1000);
+      const tzToUse = val || resolvedTz; 
+      const formattedTime = formatTimeOnly(timeToFormat, tzToUse);
+      const abbr = formattedTime.split(' ').pop();
+      setTzSuccessMsg(`✓ Calendar will now show times in ${abbr}`);
+    } catch (e) {
+      setTzSuccessMsg("✓ Timezone updated");
+    }
+
+    if (tzTimeoutRef.current) clearTimeout(tzTimeoutRef.current);
+    tzTimeoutRef.current = setTimeout(() => setTzSuccessMsg(""), 2000);
+  };
+
   // --- Web Push Logic ---
   const handlePushToggle = async () => {
     if (!("serviceWorker" in navigator)) return showToast("Push not supported in this browser", "error");
@@ -160,14 +193,12 @@ export default function SettingsPage() {
       const registration = await navigator.serviceWorker.ready;
       
       if (isSubscribed) {
-        // Unsubscribe
         const sub = await registration.pushManager.getSubscription();
         if (sub) await sub.unsubscribe();
         await fetch("/api/push/unsubscribe", { method: "POST" });
         setIsSubscribed(false);
         showToast("Push notifications disabled.");
       } else {
-        // Subscribe
         const permission = await Notification.requestPermission();
         setPushPermission(permission);
         if (permission !== "granted") throw new Error("Permission denied");
@@ -221,7 +252,6 @@ export default function SettingsPage() {
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
                 Display Name
               </label>
-              {/* Counter turns red if over 30 */}
               <span className={`text-xs font-bold transition-colors ${displayName.length > 30 ? 'text-red-400' : 'text-zinc-600'}`}>
                 {displayName.length} / 30
               </span>
@@ -238,7 +268,6 @@ export default function SettingsPage() {
                   }`}
                   placeholder="Enter your name..."
                 />
-                {/* Visual warning message */}
                 {displayName.length > 30 && (
                   <p className="text-xs text-red-400 mt-2 font-medium animate-in fade-in slide-in-from-top-1">
                     Display name must be 30 characters or less.
@@ -246,7 +275,6 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="w-full sm:w-auto shrink-0">
-                {/* Button remains clickable so the user can trigger the error toast and see why it failed */}
                 <AsyncButton 
                   onClick={handleSaveProfile} 
                   className="w-full px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl"
@@ -369,6 +397,49 @@ export default function SettingsPage() {
               <option value="Title">Title (A-Z)</option>
               <option value="Score">Score (High-Low)</option>
               <option value="Progress">Progress</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
+            <div className="flex-1 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Timezone</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                Display times for airings in a specific timezone.
+              </p>
+              {/* Always show preview, falling back to resolvedTz if auto is selected */}
+              <p className="text-xs text-zinc-500 mt-2">
+                Times will display as: <span className="text-cyan-400">
+                  {formatTimeOnly(Math.floor(Date.now() / 1000), timezone || resolvedTz)}
+                </span>
+              </p>
+              <div className="h-4 mt-1">
+                {tzSuccessMsg && (
+                  <p className="text-xs text-emerald-400 font-medium animate-in fade-in slide-in-from-left-1">{tzSuccessMsg}</p>
+                )}
+              </div>
+            </div>
+            <select 
+              value={timezone} 
+              onChange={(e) => handleTimezoneChange(e.target.value)}
+              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
+            >
+              {/* Distinct empty string value prevents the instant-close glitch */}
+              <option value="">Auto-detect (currently {resolvedTz})</option>
+              <option value="Asia/Kolkata">Asia/Kolkata — IST (India)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo — JST (Japan)</option>
+              <option value="Asia/Seoul">Asia/Seoul — KST (South Korea)</option>
+              <option value="Asia/Shanghai">Asia/Shanghai — CST (China)</option>
+              <option value="Asia/Singapore">Asia/Singapore — SGT</option>
+              <option value="Asia/Jakarta">Asia/Jakarta — WIB (Indonesia)</option>
+              <option value="Europe/London">Europe/London — GMT/BST</option>
+              <option value="Europe/Paris">Europe/Paris — CET/CEST</option>
+              <option value="Europe/Berlin">Europe/Berlin — CET/CEST</option>
+              <option value="America/New_York">America/New_York — EST/EDT</option>
+              <option value="America/Chicago">America/Chicago — CST/CDT</option>
+              <option value="America/Los_Angeles">America/Los_Angeles — PST/PDT</option>
+              <option value="America/Sao_Paulo">America/Sao_Paulo — BRT</option>
+              <option value="Australia/Sydney">Australia/Sydney — AEST</option>
+              <option value="Pacific/Auckland">Pacific/Auckland — NZST</option>
             </select>
           </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import { formatAiringTime } from "@/lib/timezone";
 
 interface Props {
   anime: any;
@@ -287,7 +288,7 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
                   {ep.title_japanese && <p className="text-xs text-zinc-500 truncate">{ep.title_japanese}</p>}
                 </div>
                 <div className="shrink-0 text-xs text-zinc-500 font-medium">
-                  {ep.aired ? new Date(ep.aired).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : "TBA"}
+                  {ep.aired ? formatAiringTime(ep.aired) : "TBA"}
                 </div>
               </div>
             )) : <p className="text-zinc-500 text-sm">No past episodes listed.</p>}
@@ -384,7 +385,7 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-xl">
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/80">
         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Your List</span>
-        <span className="text-[10px] text-zinc-500 font-medium">Added {new Date(entry.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+        <span className="text-[10px] text-zinc-500 font-medium">Added {formatAiringTime(entry.created_at)}</span>
       </div>
       <div className="space-y-4">
         <div>

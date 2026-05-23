@@ -53,3 +53,19 @@ export function formatTimeOnly(unixSeconds: number, tz?: string): string {
 
   return `${baseTime} ${getTzAbbr(date, timezone)}`;
 }
+
+/**
+ * Calculates the breakdown of days, hours, minutes, and seconds 
+ * remaining from a given duration in seconds.
+ */
+export function getCountdownParts(seconds: number) {
+  if (seconds <= 0) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  }
+  return {
+    days: Math.floor(seconds / (3600 * 24)),
+    hours: Math.floor((seconds % (3600 * 24)) / 3600),
+    minutes: Math.floor((seconds % 3600) / 60),
+    seconds: Math.floor(seconds % 60)
+  };
+}

@@ -6,9 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
-import { formatTimeOnly } from "@/lib/timezone";
 
-// Helper for Web Push
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -39,6 +37,10 @@ export default function SettingsPage() {
   const [notifyWatchingOnly, setNotifyWatchingOnly] = useState(true);
   const [emailNotify, setEmailNotify] = useState(false);
   const [showAdult, setShowAdult] = useState(false);
+  
+  // New Preferences
+  const [notificationFormat, setNotificationFormat] = useState<"raw" | "sub" | "dub">("sub");
+  const [countdownEnabled, setCountdownEnabled] = useState(true);
 
   // Preferences (Local Storage)
   const [defaultView, setDefaultView] = useState("grid");
@@ -47,7 +49,14 @@ export default function SettingsPage() {
   // Timezone Preference
   const [timezone, setTimezone] = useState("");
   const [resolvedTz, setResolvedTz] = useState("");
+  
+  // Inline Indicators
+  const [formatSuccessMsg, setFormatSuccessMsg] = useState("");
+  const [countdownSuccessMsg, setCountdownSuccessMsg] = useState("");
   const [tzSuccessMsg, setTzSuccessMsg] = useState("");
+  
+  const formatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tzTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notifications (Web Push)
@@ -66,19 +75,20 @@ export default function SettingsPage() {
       if (!user) return router.push("/login");
       setEmail(user.email || "");
 
-      // Load Profile & Prefs
-      const [ { data: profile }, { data: prefs } ] = await Promise.all([
+      // Parallel extraction: Account profile details + preferences API endpoint
+      const [profileSnap, prefsData] = await Promise.all([
         supabase.from("profiles").select("display_name").eq("id", user.id).single(),
-        supabase.from("user_preferences").select("*").eq("user_id", user.id).single()
+        fetch("/api/preferences").then((res) => res.json())
       ]);
 
-      if (profile) setDisplayName(profile.display_name || "");
-      if (prefs) {
-        setNotifyWatchingOnly(prefs.notify_watching_only);
-        setEmailNotify(prefs.email_notifications);
-        setShowAdult(prefs.show_adult);
-      } else {
-        await supabase.from("user_preferences").upsert({ user_id: user.id });
+      if (profileSnap.data) setDisplayName(profileSnap.data.display_name || "");
+      
+      if (prefsData && !prefsData.error) {
+        setNotifyWatchingOnly(prefsData.notify_watching_only);
+        setEmailNotify(prefsData.email_notifications);
+        setShowAdult(prefsData.show_adult);
+        setNotificationFormat(prefsData.notification_format || "sub");
+        setCountdownEnabled(prefsData.countdown_enabled !== false);
       }
 
       // Load LocalStorage
@@ -88,7 +98,6 @@ export default function SettingsPage() {
       // Load Timezone
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       setResolvedTz(browserTz);
-      // Use an empty string to represent "Auto-detect"
       setTimezone(localStorage.getItem("aniotako_timezone") || "");
 
       // Load Push Status
@@ -123,14 +132,13 @@ export default function SettingsPage() {
     setIsSavingProfile(true);
     try {
       const res = await fetch("/api/profile", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: displayName })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: displayName })
       });
       
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to save profile");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to save profile");
       
       showToast("Profile updated successfully!");
       router.refresh();
@@ -141,16 +149,52 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUpdatePref = async (key: string, value: boolean | string) => {
+  const handleUpdatePref = async (key: string, value: any) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    if (key === "notify_watching_only" && typeof value === "boolean") setNotifyWatchingOnly(value);
-    if (key === "email_notifications" && typeof value === "boolean") setEmailNotify(value);
-    if (key === "show_adult" && typeof value === "boolean") setShowAdult(value);
+    if (key === "notify_watching_only") setNotifyWatchingOnly(value);
+    if (key === "email_notifications") setEmailNotify(value);
+    if (key === "show_adult") setShowAdult(value);
 
     await supabase.from("user_preferences").update({ [key]: value }).eq("user_id", user.id);
     showToast("Preferences saved.");
+  };
+
+  const handleFormatChange = async (val: "raw" | "sub" | "dub") => {
+    setNotificationFormat(val);
+    try {
+      const res = await fetch("/api/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notification_format: val })
+      });
+      if (res.ok) {
+        setFormatSuccessMsg("✓ Saved");
+        if (formatTimeoutRef.current) clearTimeout(formatTimeoutRef.current);
+        formatTimeoutRef.current = setTimeout(() => setFormatSuccessMsg(""), 1500);
+      }
+    } catch (e) {
+      showToast("Failed to save format preference", "error");
+    }
+  };
+
+  const handleCountdownToggle = async (val: boolean) => {
+    setCountdownEnabled(val);
+    try {
+      const res = await fetch("/api/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ countdown_enabled: val })
+      });
+      if (res.ok) {
+        setCountdownSuccessMsg("✓ Saved");
+        if (countdownTimeoutRef.current) clearTimeout(countdownTimeoutRef.current);
+        countdownTimeoutRef.current = setTimeout(() => setCountdownSuccessMsg(""), 1500);
+      }
+    } catch (e) {
+      showToast("Failed to save countdown preference", "error");
+    }
   };
 
   const handleLocalPref = (key: string, value: string) => {
@@ -162,26 +206,15 @@ export default function SettingsPage() {
 
   const handleTimezoneChange = (val: string) => {
     setTimezone(val);
-    
-    // If "Auto" is selected, clear the saved preference
     if (val === "") {
       localStorage.removeItem("aniotako_timezone");
     } else {
       localStorage.setItem("aniotako_timezone", val);
     }
     
-    try {
-      const timeToFormat = Math.floor(Date.now() / 1000);
-      const tzToUse = val || resolvedTz; 
-      const formattedTime = formatTimeOnly(timeToFormat, tzToUse);
-      const abbr = formattedTime.split(' ').pop();
-      setTzSuccessMsg(`✓ Calendar will now show times in ${abbr}`);
-    } catch (e) {
-      setTzSuccessMsg("✓ Timezone updated");
-    }
-
+    setTzSuccessMsg("✓ Saved");
     if (tzTimeoutRef.current) clearTimeout(tzTimeoutRef.current);
-    tzTimeoutRef.current = setTimeout(() => setTzSuccessMsg(""), 2000);
+    tzTimeoutRef.current = setTimeout(() => setTzSuccessMsg(""), 1500);
   };
 
   // --- Web Push Logic ---
@@ -237,7 +270,27 @@ export default function SettingsPage() {
     }
   };
 
-  if (isLoading) return <div className="min-h-screen flex justify-center pt-32"><div className="w-8 h-8 border-4 border-zinc-800 border-t-fuchsia-500 rounded-full animate-spin"></div></div>;
+  // Generate responsive local preview for chosen timezone mapping
+  const activeTz = timezone || resolvedTz;
+  let livePreviewStr = "";
+  try {
+    livePreviewStr = new Date().toLocaleTimeString("en-US", {
+      timeZone: activeTz,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short"
+    });
+  } catch (err) {
+    livePreviewStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex justify-center pt-32">
+        <div className="w-8 h-8 border-4 border-zinc-800 border-t-fuchsia-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12 pb-32">
@@ -296,9 +349,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* --- NOTIFICATIONS SECTION --- */}
+      {/* --- NOTIFICATIONS & DISPLAY SECTION --- */}
       <section className="mb-12">
-        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Notifications</h2>
+        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Notifications & Display</h2>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-lg divide-y divide-zinc-800">
           
           <div className="flex items-center justify-between gap-4 pb-6">
@@ -307,7 +360,6 @@ export default function SettingsPage() {
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">Get instant alerts when new episodes air.</p>
               {pushPermission === "denied" && <p className="text-[10px] sm:text-xs text-red-400 mt-2">Permission denied in browser settings.</p>}
             </div>
-            
             <div className="shrink-0">
               <AsyncButton 
                 onClick={handlePushToggle} 
@@ -333,7 +385,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 pt-6">
+          <div className="flex items-center justify-between gap-4 py-6">
             <div className="flex-1 min-w-0 pr-2">
               <h3 className="text-white font-bold text-sm sm:text-base">Strict Notifications</h3>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">Only notify me for anime I am currently "Watching".</p>
@@ -341,6 +393,91 @@ export default function SettingsPage() {
             <div className="shrink-0">
               <ToggleSwitch checked={notifyWatchingOnly} onChange={(val) => handleUpdatePref("notify_watching_only", val)} />
             </div>
+          </div>
+
+          {/* Setting 1: Notification Format */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
+            <div className="flex-1 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Notification Format</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                {notificationFormat === "raw" && "Notify when episode airs in Japan (raw broadcast)"}
+                {notificationFormat === "sub" && "Notify when subtitles are available on streaming platforms (recommended)"}
+                {notificationFormat === "dub" && "Notify when English dub releases"}
+              </p>
+              <div className="h-4 mt-1">
+                {formatSuccessMsg && (
+                  <p className="text-xs text-emerald-400 font-medium animate-in fade-in slide-in-from-left-1">{formatSuccessMsg}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-1 shrink-0 self-start sm:self-auto w-full sm:w-auto">
+              {(["raw", "sub", "dub"] as const).map((format) => (
+                <button
+                  key={format}
+                  onClick={() => handleFormatChange(format)}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:px-4 text-xs sm:text-sm font-bold rounded-md capitalize transition-colors ${
+                    notificationFormat === format ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-400"
+                  }`}
+                >
+                  {format}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Setting 2: Countdown Timer */}
+          <div className="flex items-center justify-between gap-4 py-6">
+            <div className="flex-1 min-w-0 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Countdown Timer</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                Show episode countdown timers on watchlist cards and detail pages.
+              </p>
+              <div className="h-4 mt-1">
+                {countdownSuccessMsg && (
+                  <p className="text-xs text-emerald-400 font-medium animate-in fade-in slide-in-from-left-1">{countdownSuccessMsg}</p>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0">
+              <ToggleSwitch checked={countdownEnabled} onChange={handleCountdownToggle} />
+            </div>
+          </div>
+
+          {/* Setting 3: Timezone Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6">
+            <div className="flex-1 pr-2">
+              <h3 className="text-white font-bold text-sm sm:text-base">Timezone</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Display times for airings in a specific timezone.</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Times will display as: <span className="text-cyan-400">{livePreviewStr}</span>
+              </p>
+              <div className="h-4 mt-1">
+                {tzSuccessMsg && (
+                  <p className="text-xs text-emerald-400 font-medium animate-in fade-in slide-in-from-left-1">{tzSuccessMsg}</p>
+                )}
+              </div>
+            </div>
+            <select 
+              value={timezone} 
+              onChange={(e) => handleTimezoneChange(e.target.value)}
+              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
+            >
+              <option value="">Auto-detect (currently {resolvedTz})</option>
+              <option value="Asia/Kolkata">Asia/Kolkata — IST (India)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo — JST (Japan)</option>
+              <option value="Asia/Seoul">Asia/Seoul — KST (South Korea)</option>
+              <option value="Asia/Shanghai">Asia/Shanghai — CST (China)</option>
+              <option value="Asia/Singapore">Asia/Singapore — SGT</option>
+              <option value="Asia/Jakarta">Asia/Jakarta — WIB (Indonesia)</option>
+              <option value="Europe/London">Europe/London — GMT/BST</option>
+              <option value="Europe/Paris">Europe/Paris — CET</option>
+              <option value="America/New_York">America/New_York — EST/EDT</option>
+              <option value="America/Chicago">America/Chicago — CST/CDT</option>
+              <option value="America/Los_Angeles">America/Los_Angeles — PST/PDT</option>
+              <option value="America/Sao_Paulo">America/Sao_Paulo — BRT</option>
+              <option value="Australia/Sydney">Australia/Sydney — AEST</option>
+              <option value="Pacific/Auckland">Pacific/Auckland — NZST</option>
+            </select>
           </div>
 
         </div>
@@ -397,49 +534,6 @@ export default function SettingsPage() {
               <option value="Title">Title (A-Z)</option>
               <option value="Score">Score (High-Low)</option>
               <option value="Progress">Progress</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
-            <div className="flex-1 pr-2">
-              <h3 className="text-white font-bold text-sm sm:text-base">Timezone</h3>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                Display times for airings in a specific timezone.
-              </p>
-              {/* Always show preview, falling back to resolvedTz if auto is selected */}
-              <p className="text-xs text-zinc-500 mt-2">
-                Times will display as: <span className="text-cyan-400">
-                  {formatTimeOnly(Math.floor(Date.now() / 1000), timezone || resolvedTz)}
-                </span>
-              </p>
-              <div className="h-4 mt-1">
-                {tzSuccessMsg && (
-                  <p className="text-xs text-emerald-400 font-medium animate-in fade-in slide-in-from-left-1">{tzSuccessMsg}</p>
-                )}
-              </div>
-            </div>
-            <select 
-              value={timezone} 
-              onChange={(e) => handleTimezoneChange(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 shrink-0 self-start sm:self-auto w-full sm:w-auto cursor-pointer"
-            >
-              {/* Distinct empty string value prevents the instant-close glitch */}
-              <option value="">Auto-detect (currently {resolvedTz})</option>
-              <option value="Asia/Kolkata">Asia/Kolkata — IST (India)</option>
-              <option value="Asia/Tokyo">Asia/Tokyo — JST (Japan)</option>
-              <option value="Asia/Seoul">Asia/Seoul — KST (South Korea)</option>
-              <option value="Asia/Shanghai">Asia/Shanghai — CST (China)</option>
-              <option value="Asia/Singapore">Asia/Singapore — SGT</option>
-              <option value="Asia/Jakarta">Asia/Jakarta — WIB (Indonesia)</option>
-              <option value="Europe/London">Europe/London — GMT/BST</option>
-              <option value="Europe/Paris">Europe/Paris — CET/CEST</option>
-              <option value="Europe/Berlin">Europe/Berlin — CET/CEST</option>
-              <option value="America/New_York">America/New_York — EST/EDT</option>
-              <option value="America/Chicago">America/Chicago — CST/CDT</option>
-              <option value="America/Los_Angeles">America/Los_Angeles — PST/PDT</option>
-              <option value="America/Sao_Paulo">America/Sao_Paulo — BRT</option>
-              <option value="Australia/Sydney">Australia/Sydney — AEST</option>
-              <option value="Pacific/Auckland">Pacific/Auckland — NZST</option>
             </select>
           </div>
 
@@ -521,7 +615,7 @@ export default function SettingsPage() {
   );
 }
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) {
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (val: boolean) => void }) {
   return (
     <button 
       onClick={() => onChange(!checked)}

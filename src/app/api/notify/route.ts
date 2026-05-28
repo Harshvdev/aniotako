@@ -1,196 +1,229 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
+import { Client } from "@upstash/qstash";
 import webpush from "web-push";
 
-// Initialize Web Push with your VAPID keys
+// Initialize Web Push using environment variables
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT || "mailto:harsh.vs.tech@gmail.com",
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
 
-export async function GET(req: Request) {
+// Initialize Upstash QStash client
+const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+
+// Helper to compute ISO Week and Year matching the scheduling engine properties
+function getISOWeekAndYear(date: Date) {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+  return { week: weekNum, year: target.getFullYear() };
+}
+
+async function handler(req: Request) {
   try {
-    // 1. Authenticate the Cron Request
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized cron request" }, { status: 401 });
-    }
+    // --- Step 1: Parse Payload from Scanner ---
+    const { 
+      anilist_id, 
+      mal_id, 
+      episode, 
+      format, 
+      scheduled_at, 
+      title, 
+      poster_url 
+    } = await req.json();
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 2. Determine today's day of the week
-    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const todayStr = days[new Date().getDay()];
+    const now = new Date();
+    const nowUnix = Math.floor(now.getTime() / 1000);
 
-    // 3. Fetch today's airing anime from Jikan
-    const jikanRes = await fetch(`https://api.jikan.moe/v4/schedules?filter=${todayStr}`);
-    if (!jikanRes.ok) throw new Error("Failed to fetch schedule from Jikan");
-    const { data: scheduleData } = await jikanRes.json();
-    
-    if (!scheduleData || scheduleData.length === 0) {
-      return NextResponse.json({ message: "No anime airing today." });
+    // --- Step 2: Live JIT Verification Against AnimeSchedule ---
+    const currentWeekInfo = getISOWeekAndYear(now);
+    const scheduleRes = await fetch(
+      `https://animeschedule.net/api/v3/timetables?week=${currentWeekInfo.week}&year=${currentWeekInfo.year}&tz=UTC`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.ANIMESCHEDULE_TOKEN}`,
+        },
+      }
+    );
+
+    if (!scheduleRes.ok) {
+      throw new Error(`AnimeSchedule fallback validation failed: ${scheduleRes.statusText}`);
     }
 
-    const airingMalIds = scheduleData.map((a: any) => a.mal_id);
+    const timetableShows = await scheduleRes.json();
+    let liveShowData = null;
 
-    // 4. Find all users watching these airing anime
-    const { data: watchingEntries, error: watchErr } = await supabaseAdmin
+    if (Array.isArray(timetableShows)) {
+      liveShowData = timetableShows.find((show: any) => {
+        const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
+        if (!anilistWeb) return false;
+        const match = anilistWeb.url.match(/anime\/(\d+)/);
+        return match && parseInt(match[1], 10) === anilist_id;
+      });
+    }
+
+    // Determine the corresponding dynamic property format targets
+    let liveTimestampStr = null;
+    if (liveShowData) {
+      if (format === "raw") liveTimestampStr = liveShowData.episodeDate;
+      if (format === "sub") liveTimestampStr = liveShowData.subPostDate;
+      if (format === "dub") liveTimestampStr = liveShowData.dubPostDate;
+    }
+
+    // CASE C: Episode canceled or field target evaluates to null
+    if (!liveShowData || !liveTimestampStr) {
+      return NextResponse.json({ ok: true, status: "Cancelled or untracked format target. Skipping dispatch." }, { status: 200 });
+    }
+
+    const liveUnix = Math.floor(new Date(liveTimestampStr).getTime() / 1000);
+    const differenceInSeconds = Math.abs(liveUnix - scheduled_at);
+
+    // CASE B: Delayed — Target shifted out of window bounds by more than 10 minutes
+    if (differenceInSeconds > 600 && liveUnix > nowUnix) {
+      // Re-queue the exact message structure to QStash aligned with the updated timeline
+      await qstash.publishJSON({
+        url: process.env.NEXT_PUBLIC_SITE_URL + "/api/notify",
+        body: { 
+          anilist_id, 
+          mal_id, 
+          episode, 
+          format, 
+          scheduled_at: liveUnix, 
+          title, 
+          poster_url 
+        },
+        notBefore: liveUnix,
+        retries: 2,
+      });
+
+      return NextResponse.json({ ok: true, status: `Rescheduled delayed item to Unix timestamp: ${liveUnix}` }, { status: 200 });
+    }
+
+    // CASE A: Confirmed matching window targets (Proceed only if within limits and timestamp arrived)
+    const isReadyToAir = liveUnix <= (nowUnix + 60);
+    if (!isReadyToAir) {
+      return NextResponse.json({ ok: true, status: "Waiting window frame execution target mismatch." }, { status: 200 });
+    }
+
+    // --- Step 3: Deduplication ---
+    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
+    const { data: existingNotif } = await supabaseAdmin
+      .from("notifications")
+      .select("id")
+      .eq("mal_id", mal_id)
+      .eq("episode_number", episode)
+      .eq("format", format)
+      .gte("created_at", twelveHoursAgo)
+      .maybeSingle();
+
+    if (existingNotif) {
+      return NextResponse.json({ ok: true, status: "Silently skipped duplicate notification event pipeline." }, { status: 200 });
+    }
+
+    // --- Step 4: Find Users and Notify ---
+    // Join watchlist table across explicit relational format preferences
+    const { data: usersToNotify, error: userQueryError } = await supabaseAdmin
       .from("watchlist_entries")
-      .select("user_id, mal_id, title")
+      .select(`
+        user_id, 
+        title, 
+        title_english,
+        user_preferences!inner(notification_format)
+      `)
+      .eq("mal_id", mal_id)
       .eq("status", "watching")
-      .in("mal_id", airingMalIds);
+      .eq("user_preferences.notification_format", format);
 
-    if (watchErr) throw watchErr;
-    if (!watchingEntries || watchingEntries.length === 0) {
-      return NextResponse.json({ message: "No users watching today's airing anime." });
+    if (userQueryError) throw userQueryError;
+    if (!usersToNotify || usersToNotify.length === 0) {
+      return NextResponse.json({ ok: true, status: "No users watching active preference format target." }, { status: 200 });
     }
 
-    // 5. Gather required metadata
-    const uniqueUserIds = [...new Set(watchingEntries.map(e => e.user_id))];
-    const uniqueAiringMalIds = [...new Set(watchingEntries.map(e => e.mal_id))]; // Only the ones actually being watched
-    
-    const [ { data: metadata }, { data: subscriptions } ] = await Promise.all([
-      supabaseAdmin.from("anime_metadata").select("mal_id, poster_url, jikan_raw").in("mal_id", uniqueAiringMalIds),
-      supabaseAdmin.from("push_subscriptions").select("*").in("user_id", uniqueUserIds)
-    ]);
+    // Bulk resolve targeted user IDs to collect active web push credentials in one query
+    const targetUserIds = usersToNotify.map((u) => u.user_id);
+    const { data: pushSubscriptions } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("*")
+      .in("user_id", targetUserIds);
 
-    // --- NEW: FETCH EPISODE NUMBERS ONCE PER ANIME ---
-    const episodeMap: Record<number, number | null> = {};
-    const today = new Date();
+    // Format-aware localized dispatch templates
+    let pushBody = `New episode of ${title} is out now!`;
+    if (format === "raw") pushBody = `Episode ${episode} of ${title} is airing in Japan now!`;
+    if (format === "sub") pushBody = `Episode ${episode} of ${title} subtitles are available!`;
+    if (format === "dub") pushBody = `Episode ${episode} of ${title} English dub is out!`;
 
-    for (const animeId of uniqueAiringMalIds) {
-      let epNum: number | null = null;
-
-      try {
-        // Pause for 1 second to respect Jikan's strict rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const epRes = await fetch(`https://api.jikan.moe/v4/anime/${animeId}/episodes`);
-        if (epRes.ok) {
-          const { data: epData, pagination } = await epRes.json();
-          
-          let targetData = epData;
-
-          // THE FIX: If there are multiple pages (like One Piece), fetch the LAST page!
-          if (pagination && pagination.last_visible_page > 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Pause for rate limit
-            const lastPageRes = await fetch(`https://api.jikan.moe/v4/anime/${animeId}/episodes?page=${pagination.last_visible_page}`);
-            if (lastPageRes.ok) {
-              const lastPageJson = await lastPageRes.json();
-              targetData = lastPageJson.data;
-            }
-          }
-
-          if (targetData && targetData.length > 0) {
-            const airedEpisodes = targetData.filter((ep: any) => ep.aired && new Date(ep.aired) <= today);
-            if (airedEpisodes.length > 0) {
-              epNum = Math.max(...airedEpisodes.map((ep: any) => ep.mal_id));
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to fetch episodes for ${animeId}`, err);
-      }
-
-      // Fallback Math: If Jikan episodes API fails or is empty, calculate based on start date
-      if (epNum === null) {
-        const meta = metadata?.find(m => m.mal_id === animeId);
-        const airedFrom = meta?.jikan_raw?.aired?.from;
-        
-        if (airedFrom) {
-          const startDate = new Date(airedFrom);
-          if (startDate <= today) {
-            // Count milliseconds between dates, convert to weeks, add 1
-            const diffTime = Math.abs(today.getTime() - startDate.getTime());
-            const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
-            epNum = diffWeeks + 1;
-          }
-        }
-      }
-
-      episodeMap[animeId] = epNum;
-    }
-
-    let inAppCreated = 0;
-    let pushesSent = 0;
-    let pushErrors = 0;
-
-    // 6. Process matches and send notifications
-    for (const entry of watchingEntries) {
-      const meta = metadata?.find(m => m.mal_id === entry.mal_id);
-      const posterUrl = meta?.poster_url || null;
-      const epNum = episodeMap[entry.mal_id] || null; // Retrieve the calculated episode
-
-      // A. Create In-App Notification
-      const { data: insertedNotif, error: insertErr } = await supabaseAdmin
-        .from("notifications")
-        .upsert({
-          user_id: entry.user_id,
-          mal_id: entry.mal_id,
-          anime_title: entry.title,
-          poster_url: posterUrl,
-          episode_number: epNum // Save to DB
-        }, { 
-          onConflict: "user_id, mal_id, created_date",
-          ignoreDuplicates: true 
-        })
-        .select("id");
-
-      if (insertErr) {
-        console.error(`Failed to insert notification for ${entry.user_id}`, insertErr);
-      } else if (insertedNotif && insertedNotif.length > 0) {
-        inAppCreated++;
-      }
-
-      // B. Send Web Push Notification
-      const userSubs = subscriptions?.filter(s => s.user_id === entry.user_id) || [];
-      if (userSubs.length > 0) {
-        
-        // Construct the specific push text
-        const pushBody = epNum 
-          ? `Episode ${epNum} of ${entry.title} is out now!` 
-          : `${entry.title} — New episode out today!`;
-
-        const payload = JSON.stringify({
-          title: entry.title,
-          body: pushBody,
-          icon: posterUrl || "/file.svg",
-          data: { url: `/anime/${entry.mal_id}` }
-        });
-
-        for (const sub of userSubs) {
-          try {
-            await webpush.sendNotification({
-              endpoint: sub.endpoint,
-              keys: { p256dh: sub.p256dh, auth: sub.auth }
-            }, payload);
-            pushesSent++;
-          } catch (err: any) {
-            pushErrors++;
-            if (err.statusCode === 410 || err.statusCode === 404) {
-               await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
-            }
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      summary: {
-        matches_found: watchingEntries.length,
-        in_app_notifications_created: inAppCreated,
-        pushes_sent: pushesSent,
-        push_errors: pushErrors
-      } 
+    const notificationPayload = JSON.stringify({
+      title: title,
+      body: pushBody,
+      icon: poster_url || "/file.svg",
+      data: { url: `/anime/${mal_id}` },
     });
 
+    const pushPromises: Promise<any>[] = [];
+    const internalNotificationsToInsert: any[] = [];
+
+    for (const user of usersToNotify) {
+      // Create in-app entity properties
+      internalNotificationsToInsert.push({
+        user_id: user.user_id,
+        mal_id: mal_id,
+        anime_title: title,
+        episode_number: episode,
+        poster_url: poster_url,
+        format: format,
+        is_read: false,
+      });
+
+      // Map subscriptions arrays
+      const subs = pushSubscriptions?.filter((s) => s.user_id === user.user_id) || [];
+      subs.forEach((sub) => {
+        const promise = webpush
+          .sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+            },
+            notificationPayload
+          )
+          .catch(async (err: any) => {
+            // Unregister obsolete/expired client targets automatically
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
+            }
+          });
+        pushPromises.push(promise);
+      });
+    }
+
+    // Execute database operations and background workers concurrently
+    await Promise.all([
+      supabaseAdmin.from("notifications").insert(internalNotificationsToInsert),
+      Promise.allSettled(pushPromises),
+    ]);
+
+    return NextResponse.json({ ok: true, status: "Dispatched target alerts successfully." }, { status: 200 });
+
   } catch (error: any) {
-    console.error("Notify Cron Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Graceful errors catcher layout return schema structure. Always returns status 200
+    // so that operational logic drops or infrastructure failures don't get trapped in infinite QStash retry routines.
+    console.error("JIT Delivery Engine Fail Exception:", error);
+    return NextResponse.json({ ok: false, error: error.message || "Execution exception skipped" }, { status: 200 });
   }
 }
+
+// Wrap the route context handling securely using the Upstash cryptographic verification middleware
+export const POST = verifySignatureAppRouter(handler);

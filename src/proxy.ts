@@ -48,7 +48,7 @@ export async function proxy(request: NextRequest) {
   const isProtectedPath = protectedPaths.some((p) => path.startsWith(p));
   
   const isApiRoute = path.startsWith("/api/");
-  const isCronRoute = path === "/api/notify";
+  const isCronRoute = path === "/api/notify" || path.startsWith("/api/cron/");
 
   const authPaths = ["/login", "/signup"];
   const isAuthPath = authPaths.includes(path);

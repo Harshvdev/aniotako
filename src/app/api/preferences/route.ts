@@ -11,7 +11,7 @@ export async function GET() {
   // Attempt to fetch current configurations
   let { data, error } = await supabase
     .from("user_preferences")
-    .select("notification_format, countdown_enabled, title_language, show_adult, notify_watching_only, email_notifications")
+    .select("notification_format, countdown_enabled, title_language, show_adult, notify_watching_only, email_notifications, timezone")
     .eq("user_id", user.id)
     .single();
 
@@ -20,7 +20,7 @@ export async function GET() {
     const { data: newPrefs, error: insertError } = await supabase
       .from("user_preferences")
       .insert({ user_id: user.id })
-      .select("notification_format, countdown_enabled, title_language, show_adult, notify_watching_only, email_notifications")
+      .select("notification_format, countdown_enabled, title_language, show_adult, notify_watching_only, email_notifications, timezone")
       .single();
 
     if (insertError) {
@@ -45,13 +45,14 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     
     // Whitelist acceptable update fields
-    const { notification_format, countdown_enabled, title_language, show_adult } = body;
+    const { notification_format, countdown_enabled, title_language, show_adult, timezone } = body;
     const updates: Record<string, any> = {};
     
     if (notification_format !== undefined) updates.notification_format = notification_format;
     if (countdown_enabled !== undefined) updates.countdown_enabled = countdown_enabled;
     if (title_language !== undefined) updates.title_language = title_language;
     if (show_adult !== undefined) updates.show_adult = show_adult;
+    if (timezone !== undefined) updates.timezone = timezone;
 
     const { data, error } = await supabase
       .from("user_preferences")

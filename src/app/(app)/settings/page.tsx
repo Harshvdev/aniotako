@@ -204,18 +204,28 @@ export default function SettingsPage() {
     showToast("Layout saved to this browser.");
   };
 
-  const handleTimezoneChange = (val: string) => {
-    setTimezone(val);
-    if (val === "") {
-      localStorage.removeItem("aniotako_timezone");
-    } else {
-      localStorage.setItem("aniotako_timezone", val);
-    }
-    
-    setTzSuccessMsg("✓ Saved");
-    if (tzTimeoutRef.current) clearTimeout(tzTimeoutRef.current);
-    tzTimeoutRef.current = setTimeout(() => setTzSuccessMsg(""), 1500);
-  };
+  const handleTimezoneChange = async (val: string) => {
+  setTimezone(val);
+
+  if (val === "") {
+    localStorage.removeItem("aniotako_timezone");
+  } else {
+    localStorage.setItem("aniotako_timezone", val);
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await fetch("/api/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timezone: val || null }),
+    });
+  }
+
+  setTzSuccessMsg("✓ Saved");
+  if (tzTimeoutRef.current) clearTimeout(tzTimeoutRef.current);
+  tzTimeoutRef.current = setTimeout(() => setTzSuccessMsg(""), 1500);
+};
 
   // --- Web Push Logic ---
   const handlePushToggle = async () => {

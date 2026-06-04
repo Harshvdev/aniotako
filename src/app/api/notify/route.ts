@@ -186,7 +186,9 @@ async function handler(req: Request) {
         poster_url: poster_url,
         format: format,
         is_read: false,
-      });
+        aired_at: liveTimestampStr,
+        created_at: now.toISOString(),
+  });
 
       // Map subscriptions arrays
       const subs = pushSubscriptions?.filter((s) => s.user_id === user.user_id) || [];

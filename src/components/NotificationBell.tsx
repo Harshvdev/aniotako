@@ -14,6 +14,8 @@ interface Notification {
   poster_url: string | null;
   is_read: boolean;
   created_at: string;
+  format?: string | null;
+  aired_at?: string | null;
   anime_metadata?: {
     title_english?: string | null;
     title_romaji?: string | null;
@@ -199,12 +201,20 @@ export default function NotificationBell() {
                         <p className={`text-sm truncate ${!notif.is_read ? "font-bold text-white" : "font-medium text-zinc-300"}`}>
                           {displayTitle}
                         </p>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          {notif.episode_number ? `Episode ${notif.episode_number} is out today!` : "New episode out today!"}
-                        </p>
-                        <p className="text-[10px] font-bold text-zinc-500 mt-1.5 uppercase tracking-wider">
-                          {formatRelativeTime(notif.created_at)}
-                        </p>
+                        
+                        <div className="text-xs text-zinc-400 mt-1 space-y-0.5">
+                          <p className="font-semibold text-fuchsia-400">
+                            Episode {notif.episode_number ?? "?"} ({notif.format?.toUpperCase() ?? "SUB"})
+                          </p>
+                          {notif.aired_at && (
+                            <p className="text-[11px] text-zinc-500">
+                              Aired on {new Date(notif.aired_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(notif.aired_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                          <p className="text-[11px] text-zinc-500">
+                            Notified at {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({formatRelativeTime(notif.created_at)})
+                          </p>
+                        </div>
                       </div>
 
                       {!notif.is_read && (

@@ -142,7 +142,7 @@ async function handler(req: Request) {
         user_id, 
         title, 
         title_english,
-        user_preferences!inner(notification_format)
+        user_preferences!inner(notification_format, timezone)
       `)
       .eq("mal_id", mal_id)
       .eq("status", "watching")
@@ -160,23 +160,47 @@ async function handler(req: Request) {
       .select("*")
       .in("user_id", targetUserIds);
 
-    // Format-aware localized dispatch templates
-    let pushBody = `New episode of ${title} is out now!`;
-    if (format === "raw") pushBody = `Episode ${episode} of ${title} is airing in Japan now!`;
-    if (format === "sub") pushBody = `Episode ${episode} of ${title} subtitles are available!`;
-    if (format === "dub") pushBody = `Episode ${episode} of ${title} English dub is out!`;
-
-    const notificationPayload = JSON.stringify({
-      title: title,
-      body: pushBody,
-      icon: poster_url || "/file.svg",
-      data: { url: `/anime/${mal_id}` },
-    });
-
     const pushPromises: Promise<any>[] = [];
     const internalNotificationsToInsert: any[] = [];
 
     for (const user of usersToNotify) {
+      // 1. Fetch user's custom timezone (fallback to UTC if missing)
+      const tz = (user.user_preferences as any)?.timezone || "UTC";
+
+      const airedAt = new Date(liveTimestampStr!);
+      const receivedAt = new Date(now.toISOString());
+
+      // 2. Localized time formatter matching user preference timezone
+      const formatDateTime = (d: Date) =>
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: tz,
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(d);
+
+      // 3. Build personalized body text strings
+      const pushBody =
+        `Episode ${episode} of ${title} aired at ${formatDateTime(airedAt)}. ` +
+        `You got this notification at ${formatDateTime(receivedAt)}.`;
+
+      // 4. Stringify individual user payload configuration mapping
+      const notificationPayload = JSON.stringify({
+        title: title,
+        body: pushBody,
+        icon: poster_url || "/file.svg",
+        data: {
+          url: `/anime/${mal_id}`,
+          aired_at: liveTimestampStr,
+          received_at: now.toISOString(),
+          format,
+          episode,
+          title,
+        },
+      });
+
       // Create in-app entity properties
       internalNotificationsToInsert.push({
         user_id: user.user_id,
@@ -188,7 +212,7 @@ async function handler(req: Request) {
         is_read: false,
         aired_at: liveTimestampStr,
         created_at: now.toISOString(),
-  });
+      });
 
       // Map subscriptions arrays
       const subs = pushSubscriptions?.filter((s) => s.user_id === user.user_id) || [];
@@ -199,7 +223,7 @@ async function handler(req: Request) {
               endpoint: sub.endpoint,
               keys: { p256dh: sub.p256dh, auth: sub.auth },
             },
-            notificationPayload
+            notificationPayload // This now safely uses the localized per-user payload
           )
           .catch(async (err: any) => {
             // Unregister obsolete/expired client targets automatically

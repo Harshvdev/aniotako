@@ -65,76 +65,153 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const isStale = !meta || !meta.cached_at || new Date(meta.cached_at) < sevenDaysAgo;
 
+    let anilistData = null;
+
     if (!isStale && meta?.anilist_raw) {
       console.log(`[API] Serving ${mal_id} from Supabase Cache`);
-      return NextResponse.json(meta.anilist_raw);
-    }
-
-    // 2. Fetch from AniList using Native Fetch
-    console.log(`[API] Cache missing or stale. Fetching ${mal_id} directly from AniList GraphQL...`);
-    const response = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        query: ANILIST_QUERY,
-        variables: { idMal: mal_id }
-      })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[API] AniList returned HTTP ${response.status}:`, errorText);
-        throw new Error(`AniList returned HTTP ${response.status}`);
-    }
-
-    const json = await response.json();
-
-    if (json.errors) {
-      console.error(`[API] AniList GraphQL Errors:`, json.errors);
-      throw new Error(json.errors[0].message);
-    }
-
-    const anilistData = json.data.Media;
-
-    if (anilistData) {
-      console.log(`[API] Successfully fetched ${mal_id} from AniList. Upserting to cache...`);
-      // 3. Normalize & Upsert into Database
-      const combinedGenres = Array.from(new Set([
-        ...(anilistData.genres || []),
-        ...(anilistData.tags?.map((t: any) => t.name) || [])
-      ]));
-
-      const cleanSynopsis = anilistData.description ? anilistData.description.replace(/<[^>]*>?/gm, '') : null;
-      const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name 
-                      || anilistData.studios?.nodes?.[0]?.name || null;
-
-      await supabase.from("anime_metadata").upsert({
-        mal_id,
-        anilist_id: anilistData.id,
-        title: anilistData.title.romaji || anilistData.title.english,
-        title_english: anilistData.title.english,
-        title_romaji: anilistData.title.romaji,
-        title_native: anilistData.title.native,
-        genres: combinedGenres,
-        type: anilistData.format || "Unknown",
-        season: anilistData.season || null,
-        airing_status: anilistData.status || null,
-        studio: mainStudio,
-        year: anilistData.seasonYear || null,
-        total_episodes: anilistData.episodes || null,
-        synopsis: cleanSynopsis,
-        poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
-        cached_at: new Date().toISOString(),
-        anilist_raw: anilistData 
-      });
+      anilistData = meta.anilist_raw;
     } else {
-        console.warn(`[API] AniList returned null data for MAL ID ${mal_id}`);
+      // 2. Fetch from AniList using Native Fetch
+      console.log(`[API] Cache missing or stale. Fetching ${mal_id} directly from AniList GraphQL...`);
+      const response = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          query: ANILIST_QUERY,
+          variables: { idMal: mal_id }
+        })
+      });
+
+      if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[API] AniList returned HTTP ${response.status}:`, errorText);
+          throw new Error(`AniList returned HTTP ${response.status}`);
+      }
+
+      const json = await response.json();
+
+      if (json.errors) {
+        console.error(`[API] AniList GraphQL Errors:`, json.errors);
+        throw new Error(json.errors[0].message);
+      }
+
+      anilistData = json.data.Media;
+
+      if (anilistData) {
+        console.log(`[API] Successfully fetched ${mal_id} from AniList. Upserting to cache...`);
+        
+        // Normalize & Upsert into Database
+        const combinedGenres = Array.from(new Set([
+          ...(anilistData.genres || []),
+          ...(anilistData.tags?.map((t: any) => t.name) || [])
+        ]));
+
+        const cleanSynopsis = anilistData.description ? anilistData.description.replace(/<[^>]*>?/gm, '') : null;
+        const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name 
+                        || anilistData.studios?.nodes?.[0]?.name || null;
+
+        await supabase.from("anime_metadata").upsert({
+          mal_id,
+          anilist_id: anilistData.id,
+          title: anilistData.title.romaji || anilistData.title.english,
+          title_english: anilistData.title.english,
+          title_romaji: anilistData.title.romaji,
+          title_native: anilistData.title.native,
+          genres: combinedGenres,
+          type: anilistData.format || "Unknown",
+          season: anilistData.season || null,
+          airing_status: anilistData.status || null,
+          studio: mainStudio,
+          year: anilistData.seasonYear || null,
+          total_episodes: anilistData.episodes || null,
+          synopsis: cleanSynopsis,
+          poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
+          cached_at: new Date().toISOString(),
+          anilist_raw: anilistData 
+        });
+      } else {
+          console.warn(`[API] AniList returned null data for MAL ID ${mal_id}`);
+      }
     }
 
-    return NextResponse.json(anilistData || { error: "Not found on AniList" });
+    if (!anilistData) {
+      return NextResponse.json({ error: "Not found on AniList" }, { status: 404 });
+    }
+
+    // 3. Fetch Historical Episodes from Jikan
+    let jikanEpisodes: any[] = [];
+    try {
+      const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime/${mal_id}/episodes`);
+      if (jikanResponse.ok) {
+        const jikanJson = await jikanResponse.json();
+        jikanEpisodes = jikanJson.data || [];
+      } else {
+        console.warn(`[API] Jikan returned HTTP ${jikanResponse.status} for episodes`);
+      }
+    } catch (jikanError) {
+      console.error("[API] Failed to fetch historical episodes from Jikan:", jikanError);
+    }
+
+    // 4. Fill Missing Episodes & Merge Logic
+    const nextEpisodeNumber = meta?.next_episode_number ?? meta?.next_episode_num ?? null;
+    const maxJikanEp = jikanEpisodes.length > 0 ? Math.max(...jikanEpisodes.map((ep: any) => ep.mal_id)) : 0;
+    
+    // Determine bounds based on Jikan vs Next Airing Number
+    const targetMax = nextEpisodeNumber ? Math.max(maxJikanEp, nextEpisodeNumber) : maxJikanEp;
+    
+    const jikanMap = new Map<number, any>(jikanEpisodes.map((ep: any) => [ep.mal_id, ep]));
+    const mergedEpisodes = [];
+
+    for (let i = 1; i <= targetMax; i++) {
+      const jikanEp = jikanMap.get(i);
+
+      if (jikanEp) {
+        // Use Jikan's data if it exists
+        mergedEpisodes.push({
+          episode_number: i,
+          title: jikanEp.title,
+          aired: jikanEp.aired,
+          filler: jikanEp.filler,
+          recap: jikanEp.recap,
+          forum_url: jikanEp.forum_url,
+          is_placeholder: false,
+        });
+      } else if (nextEpisodeNumber && i === nextEpisodeNumber) {
+        // Show exact airing schedule data for the upcoming episode
+        mergedEpisodes.push({
+          episode_number: i,
+          title: `Episode ${i}`,
+          is_placeholder: false,
+          airing_at: meta?.next_airing_at || meta?.raw_air_at || null,
+        });
+      } else if (nextEpisodeNumber && i < nextEpisodeNumber) {
+        // Create placeholder rows for missing gap items
+        mergedEpisodes.push({
+          episode_number: i,
+          title: `Episode ${i} (Placeholder)`,
+          is_placeholder: true,
+        });
+      }
+    }
+
+    // 5. Build Final Combined Payload
+    const mergedAnime = {
+      ...anilistData,
+      anime_metadata: meta ? {
+        raw_air_at: meta.raw_air_at,
+        sub_air_at: meta.sub_air_at,
+        dub_air_at: meta.dub_air_at,
+        next_airing_at: meta.next_airing_at,
+        next_episode_number: nextEpisodeNumber,
+        schedule_updated_at: meta.schedule_updated_at,
+      } : null,
+      episodes: mergedEpisodes,
+    };
+
+    return NextResponse.json(mergedAnime);
 
   } catch (error: any) {
     console.error("[API] Fatal AniList Proxy Error:", error);

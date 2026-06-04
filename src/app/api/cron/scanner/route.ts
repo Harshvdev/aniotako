@@ -133,8 +133,9 @@ export async function GET(req: NextRequest) {
             raw_air_at: toUnix(show.episodeDate),
             sub_air_at: toUnix(show.subPostDate),
             dub_air_at: toUnix(show.dubPostDate),
-            next_episode_num: show.episodeNumber,
-            schedule_updated_at: Math.floor(now.getTime() / 1000),
+            next_episode_number: show.episodeNumber,
+            next_airing_at: toUnix(show.episodeDate),
+            schedule_updated_at: now.toISOString(),
           },
           { onConflict: "anilist_id" }
         );

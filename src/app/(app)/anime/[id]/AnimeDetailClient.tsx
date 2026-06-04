@@ -228,7 +228,14 @@ const targetUnixSeconds: number | null = meta
           )}
 
           <div className="md:hidden mt-6 w-full">
-            <TrackingCard entry={entry} isUpdating={isUpdating} onAdd={handleAdd} onUpdate={handleUpdate} episodes={totalEpisodeCount} />
+            <TrackingCard
+              entry={entry}
+              isUpdating={isUpdating}
+              onAdd={handleAdd}
+              onUpdate={handleUpdate}
+              episodes={totalEpisodeCount}
+              timezone={timezone}
+            />
           </div>
 
           {/* Display Genres */}
@@ -408,6 +415,11 @@ const targetUnixSeconds: number | null = meta
 
 function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone }: any) {
   const [showCompletePrompt, setShowCompletePrompt] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (!entry) {
     return (
@@ -451,7 +463,7 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone }
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/80">
         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Your List</span>
         <span className="text-[10px] text-zinc-500 font-medium">
-          Added {formatAiringTime(entry.created_at, timezone)}
+          Added {mounted ? formatAiringTime(entry.created_at, timezone) : "—"}
         </span>
       </div>
       <div className="space-y-4">

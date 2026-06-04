@@ -119,20 +119,19 @@ async function handler(req: Request) {
       return NextResponse.json({ ok: true, status: "Waiting window frame execution target mismatch." }, { status: 200 });
     }
 
-    // --- Step 3: Deduplication ---
-    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
-    const { data: existingNotif } = await supabaseAdmin
-      .from("notifications")
+    // --- Step 3: Fetch Global Event Identifier ---
+    const eventKey = `${mal_id}:${episode}:${format}:${scheduled_at}`;
+    const { data: eventRecord, error: eventError } = await supabaseAdmin
+      .from("notification_events")
       .select("id")
-      .eq("mal_id", mal_id)
-      .eq("episode_number", episode)
-      .eq("format", format)
-      .gte("created_at", twelveHoursAgo)
+      .eq("event_key", eventKey)
       .maybeSingle();
 
-    if (existingNotif) {
-      return NextResponse.json({ ok: true, status: "Silently skipped duplicate notification event pipeline." }, { status: 200 });
+    if (eventError || !eventRecord) {
+      return NextResponse.json({ ok: true, status: "Global event key context missing. Skipping execution loop." }, { status: 200 });
     }
+
+    const eventId = eventRecord.id;
 
     // --- Step 4: Find Users and Notify ---
     // Join watchlist table across explicit relational format preferences
@@ -201,27 +200,28 @@ async function handler(req: Request) {
         },
       });
 
-      // Create in-app entity properties
+      // Create in-app entity properties mapped with relational event constraints
       internalNotificationsToInsert.push({
         user_id: user.user_id,
-        mal_id: mal_id,
+        mal_id,
         anime_title: title,
         episode_number: episode,
-        poster_url: poster_url,
-        format: format,
+        poster_url,
+        format,
         is_read: false,
-        aired_at: liveTimestampStr,
+        aired_at: new Date(liveUnix * 1000).toISOString(),
         created_at: now.toISOString(),
+        notification_event_id: eventId,
       });
 
-      // Map subscriptions arrays
+      // Map subscriptions arrays using schema-compliant database keys
       const subs = pushSubscriptions?.filter((s) => s.user_id === user.user_id) || [];
       subs.forEach((sub) => {
         const promise = webpush
           .sendNotification(
             {
               endpoint: sub.endpoint,
-              keys: { p256dh: sub.p256dh, auth: sub.auth },
+              keys: { p256dh: sub.p256dh, auth: sub.auth_key },
             },
             notificationPayload // This now safely uses the localized per-user payload
           )

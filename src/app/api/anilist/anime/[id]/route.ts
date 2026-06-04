@@ -156,39 +156,57 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     }
 
     // 4. Fill Missing Episodes & Merge Logic
-    const nextEpisodeNumber = meta?.next_episode_number ?? meta?.next_episode_num ?? null;
-    const maxJikanEp = jikanEpisodes.length > 0 ? Math.max(...jikanEpisodes.map((ep: any) => ep.mal_id)) : 0;
-    
-    // Determine bounds based on Jikan vs Next Airing Number
-    const targetMax = nextEpisodeNumber ? Math.max(maxJikanEp, nextEpisodeNumber) : maxJikanEp;
-    
-    const jikanMap = new Map<number, any>(jikanEpisodes.map((ep: any) => [ep.mal_id, ep]));
+    const nextEpisodeNumber =
+      meta?.next_episode_number ??
+      meta?.next_episode_num ??
+      anilistData?.nextAiringEpisode?.episode ??
+      null;
+
+    const nextAiringUnix =
+      meta?.next_airing_at ??
+      meta?.raw_air_at ??
+      anilistData?.nextAiringEpisode?.airingAt ??
+      null;
+
+    const jikanMap = new Map<number, any>();
+    jikanEpisodes.forEach((ep: any, idx: number) => {
+      jikanMap.set(idx + 1, ep);
+    });
+
+    const lastReleasedEpisode = jikanEpisodes.length;
+    const targetMax = nextEpisodeNumber
+      ? Math.max(lastReleasedEpisode, nextEpisodeNumber)
+      : lastReleasedEpisode;
+
     const mergedEpisodes = [];
 
     for (let i = 1; i <= targetMax; i++) {
       const jikanEp = jikanMap.get(i);
 
       if (jikanEp) {
-        // Use Jikan's data if it exists
         mergedEpisodes.push({
           episode_number: i,
-          title: jikanEp.title,
-          aired: jikanEp.aired,
+          title: jikanEp.title || `Episode ${i}`,
+          aired: jikanEp.aired || null,
           filler: jikanEp.filler,
           recap: jikanEp.recap,
           forum_url: jikanEp.forum_url,
           is_placeholder: false,
         });
-      } else if (nextEpisodeNumber && i === nextEpisodeNumber) {
-        // Show exact airing schedule data for the upcoming episode
+        continue;
+      }
+
+      if (nextEpisodeNumber && i === nextEpisodeNumber) {
         mergedEpisodes.push({
           episode_number: i,
           title: `Episode ${i}`,
+          airing_at: nextAiringUnix,
           is_placeholder: false,
-          airing_at: meta?.next_airing_at || meta?.raw_air_at || null,
         });
-      } else if (nextEpisodeNumber && i < nextEpisodeNumber) {
-        // Create placeholder rows for missing gap items
+        continue;
+      }
+
+      if (nextEpisodeNumber && i < nextEpisodeNumber) {
         mergedEpisodes.push({
           episode_number: i,
           title: `Episode ${i} (Placeholder)`,

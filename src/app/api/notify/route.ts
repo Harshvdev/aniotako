@@ -200,6 +200,19 @@ async function handler(req: Request) {
         },
       });
 
+      // Guard: Check if this exact notification event has already been delivered to this specific user
+      const { data: existingNotif } = await supabaseAdmin
+        .from("notifications")
+        .select("id")
+        .eq("notification_event_id", eventId)
+        .eq("user_id", user.user_id)
+        .maybeSingle();
+
+      if (existingNotif) {
+        console.log(`[NOTIFY] Duplicate detected for user ${user.user_id} and event ${eventId}. Skipping.`);
+        continue;
+      }
+
       // Create in-app entity properties mapped with relational event constraints
       internalNotificationsToInsert.push({
         user_id: user.user_id,

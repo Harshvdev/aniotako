@@ -115,94 +115,89 @@ export async function GET(req: NextRequest) {
     const toUnix = (dateStr: string | null) =>
       dateStr ? Math.floor(new Date(dateStr).getTime() / 1000) : null;
 
-    // --- Step 4, 5 & 6: Window Filtering, Caching & Queue Processing ---
+        // --- Step 4, 5 & 6: Cache refresh for every matched show, queue only in the active window ---
     for (const show of matchedShows) {
       const epDate = new Date(show.episodeDate);
-      
-      // Determine if show falls within the current processing execution window
-      if (epDate >= windowStart && epDate <= windowEnd) {
-        inWindowCount++;
-        const anilistId = show.parsedAnilistId;
-        const malId = anilistToMalMap.get(anilistId);
+      const anilistId = show.parsedAnilistId;
+      const malId = anilistToMalMap.get(anilistId);
 
-        // Step 5: Upsert internal schema metadata cache values
-        const { error: upsertError } = await supabase.from("anime_metadata").upsert(
-          {
+      // Step 5: Always refresh cache for watched airing anime
+      const { error: upsertError } = await supabase.from("anime_metadata").upsert(
+        {
+          anilist_id: anilistId,
+          mal_id: malId,
+          raw_air_at: toUnix(show.episodeDate),
+          sub_air_at: toUnix(show.subPostDate),
+          dub_air_at: toUnix(show.dubPostDate),
+          next_episode_number: show.episodeNumber,
+          next_airing_at: toUnix(show.episodeDate),
+          schedule_updated_at: now.toISOString(),
+        },
+        { onConflict: "anilist_id" }
+      );
+
+      if (!upsertError) cacheUpdatedCount++;
+
+      // Step 6: Only queue notifications when the episode is inside the processing window
+      if (epDate < windowStart || epDate > windowEnd) {
+        continue;
+      }
+
+      inWindowCount++;
+
+      const rawAirAt = toUnix(show.episodeDate);
+      const subAirAt = toUnix(show.subPostDate);
+      const dubAirAt = toUnix(show.dubPostDate);
+
+      const formats = [
+        { format: "raw", timestamp: rawAirAt },
+        { format: "sub", timestamp: subAirAt },
+        { format: "dub", timestamp: dubAirAt },
+      ].filter((f) => f.timestamp && f.timestamp > Math.floor(now.getTime() / 1000));
+
+      const poster_url = show.imageVersionRoute
+        ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}`
+        : null;
+
+      for (const f of formats) {
+        const eventKey = `${malId}:${show.episodeNumber}:${f.format}:${f.timestamp}`;
+
+        const { error: insertEventError } = await supabase
+          .from("notification_events")
+          .insert({
+            event_key: eventKey,
             anilist_id: anilistId,
             mal_id: malId,
-            raw_air_at: toUnix(show.episodeDate),
-            sub_air_at: toUnix(show.subPostDate),
-            dub_air_at: toUnix(show.dubPostDate),
-            next_episode_number: show.episodeNumber,
-            next_airing_at: toUnix(show.episodeDate),
-            schedule_updated_at: now.toISOString(),
-          },
-          { onConflict: "anilist_id" }
-        );
-
-        if (!upsertError) cacheUpdatedCount++;
-
-        // Step 6: Queue QStash Payload Configurations
-        const rawAirAt = toUnix(show.episodeDate);
-        const subAirAt = toUnix(show.subPostDate);
-        const dubAirAt = toUnix(show.dubPostDate);
-
-        const formats = [
-          { format: "raw", timestamp: rawAirAt },
-          { format: "sub", timestamp: subAirAt },
-          { format: "dub", timestamp: dubAirAt },
-        ].filter((f) => f.timestamp && f.timestamp > Math.floor(now.getTime() / 1000));
-
-        const poster_url = show.imageVersionRoute
-          ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}`
-          : null;
-
-        for (const f of formats) {
-          // 1. Build a unique, stable event key string
-          const eventKey = `${malId}:${show.episodeNumber}:${f.format}:${f.timestamp}`;
-
-          // 2. Try to register this global event ledger row
-          const { error: insertEventError } = await supabase
-            .from("notification_events")
-            .insert({
-              event_key: eventKey,
-              anilist_id: anilistId,
-              mal_id: malId,
-              episode_number: show.episodeNumber,
-              format: f.format,
-              aired_at: new Date(f.timestamp! * 1000).toISOString(),
-            });
-
-          // 3. Handle Unique Key Constraint Violations (Postgres Error Code 23505)
-          if (insertEventError) {
-            if (insertEventError.code === "23505") {
-              // This episode format was already registered/dispatched before. Skip it!
-              continue;
-            }
-            throw insertEventError; // Fail loudly for other database runtime issues
-          }
-
-          // Dispatch Message payload to Upstash holding zones
-          await qstash.publishJSON({
-            url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/notify`,
-            body: {
-              anilist_id: anilistId,
-              mal_id: malId,
-              episode: show.episodeNumber,
-              format: f.format,
-              scheduled_at: f.timestamp,
-              title: show.title,
-              poster_url: poster_url,
-            },
-            notBefore: f.timestamp!,
-            retries: 2,
+            episode_number: show.episodeNumber,
+            format: f.format,
+            aired_at: new Date(f.timestamp! * 1000).toISOString(),
           });
 
-          // Log Metrics Increments
-          if (f.format === "raw") queuedStats.raw++;
-          if (f.format === "sub") queuedStats.sub++;
-          if (f.format === "dub") queuedStats.dub++;
+        if (insertEventError) {
+          if (insertEventError.code === "23505") {
+            continue;
+          }
+          throw insertEventError;
         }
+
+        await qstash.publishJSON({
+          url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/notify`,
+          body: {
+            anilist_id: anilistId,
+            mal_id: malId,
+            episode: show.episodeNumber,
+            format: f.format,
+            scheduled_at: f.timestamp,
+            title: show.title,
+            poster_url: poster_url,
+          },
+          notBefore: f.timestamp!,
+          retries: 2,
+        });
+
+        if (f.format === "raw") queuedStats.raw++;
+        if (f.format === "sub") queuedStats.sub++;
+        if (f.format === "dub") queuedStats.dub++;
       }
     }
 

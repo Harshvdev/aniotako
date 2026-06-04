@@ -70,70 +70,101 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (!isStale && meta?.anilist_raw) {
       console.log(`[API] Serving ${mal_id} from Supabase Cache`);
       anilistData = meta.anilist_raw;
-    } else {
-      // 2. Fetch from AniList using Native Fetch
+        } else {
       console.log(`[API] Cache missing or stale. Fetching ${mal_id} directly from AniList GraphQL...`);
-      const response = await fetch("https://graphql.anilist.co", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: JSON.stringify({
-          query: ANILIST_QUERY,
-          variables: { idMal: mal_id }
-        })
-      });
 
-      if (!response.ok) {
+      const fetchAniList = async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        try {
+          return await fetch("https://graphql.anilist.co", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: JSON.stringify({
+              query: ANILIST_QUERY,
+              variables: { idMal: mal_id }
+            }),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
+
+      let response: Response | null = null;
+      let lastError: any = null;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          response = await fetchAniList();
+          break;
+        } catch (err) {
+          lastError = err;
+          if (attempt === 3) {
+            if (meta?.anilist_raw) {
+              console.warn(`[API] AniList timed out, serving cached payload for ${mal_id}`);
+              anilistData = meta.anilist_raw;
+              break;
+            }
+            throw err;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+        }
+      }
+
+      if (response) {
+        if (!response.ok) {
           const errorText = await response.text();
           console.error(`[API] AniList returned HTTP ${response.status}:`, errorText);
           throw new Error(`AniList returned HTTP ${response.status}`);
-      }
+        }
 
-      const json = await response.json();
+        const json = await response.json();
 
-      if (json.errors) {
-        console.error(`[API] AniList GraphQL Errors:`, json.errors);
-        throw new Error(json.errors[0].message);
-      }
+        if (json.errors) {
+          console.error(`[API] AniList GraphQL Errors:`, json.errors);
+          throw new Error(json.errors[0].message);
+        }
 
-      anilistData = json.data.Media;
+        anilistData = json.data.Media;
 
-      if (anilistData) {
-        console.log(`[API] Successfully fetched ${mal_id} from AniList. Upserting to cache...`);
-        
-        // Normalize & Upsert into Database
-        const combinedGenres = Array.from(new Set([
-          ...(anilistData.genres || []),
-          ...(anilistData.tags?.map((t: any) => t.name) || [])
-        ]));
+        if (anilistData) {
+          console.log(`[API] Successfully fetched ${mal_id} from AniList. Upserting to cache...`);
 
-        const cleanSynopsis = anilistData.description ? anilistData.description.replace(/<[^>]*>?/gm, '') : null;
-        const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name 
-                        || anilistData.studios?.nodes?.[0]?.name || null;
+          const combinedGenres = Array.from(new Set([
+            ...(anilistData.genres || []),
+            ...(anilistData.tags?.map((t: any) => t.name) || [])
+          ]));
 
-        await supabase.from("anime_metadata").upsert({
-          mal_id,
-          anilist_id: anilistData.id,
-          title: anilistData.title.romaji || anilistData.title.english,
-          title_english: anilistData.title.english,
-          title_romaji: anilistData.title.romaji,
-          title_native: anilistData.title.native,
-          genres: combinedGenres,
-          type: anilistData.format || "Unknown",
-          season: anilistData.season || null,
-          airing_status: anilistData.status || null,
-          studio: mainStudio,
-          year: anilistData.seasonYear || null,
-          total_episodes: anilistData.episodes || null,
-          synopsis: cleanSynopsis,
-          poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
-          cached_at: new Date().toISOString(),
-          anilist_raw: anilistData 
-        });
-      } else {
-          console.warn(`[API] AniList returned null data for MAL ID ${mal_id}`);
+          const cleanSynopsis = anilistData.description ? anilistData.description.replace(/<[^>]*>?/gm, '') : null;
+          const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name
+                          || anilistData.studios?.nodes?.[0]?.name || null;
+
+          await supabase.from("anime_metadata").upsert({
+            mal_id,
+            anilist_id: anilistData.id,
+            title: anilistData.title.romaji || anilistData.title.english,
+            title_english: anilistData.title.english,
+            title_romaji: anilistData.title.romaji,
+            title_native: anilistData.title.native,
+            genres: combinedGenres,
+            type: anilistData.format || "Unknown",
+            season: anilistData.season || null,
+            airing_status: anilistData.status || null,
+            studio: mainStudio,
+            year: anilistData.seasonYear || null,
+            total_episodes: anilistData.episodes || null,
+            synopsis: cleanSynopsis,
+            poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
+            cached_at: new Date().toISOString(),
+            anilist_raw: anilistData
+          });
+        }
       }
     }
 
@@ -164,8 +195,8 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
 
     const nextAiringUnix =
       meta?.next_airing_at ??
-      meta?.raw_air_at ??
       anilistData?.nextAiringEpisode?.airingAt ??
+      meta?.raw_air_at ??
       null;
 
     const jikanMap = new Map<number, any>();

@@ -11,6 +11,8 @@ interface Notification {
   poster_url: string | null;
   is_read: boolean;
   created_at: string;
+  aired_at: string | null;
+  delivered_at: string | null;
 }
 
 interface Props {
@@ -31,6 +33,18 @@ function formatRelativeTime(dateString: string) {
   const diffInDays = Math.floor(diffInHours / 24);
   if (diffInDays < 7) return `${diffInDays}d ago`;
   return date.toLocaleDateString();
+}
+
+// Helper to format timestamps to an absolute readable date/time string
+function formatAbsoluteTime(dateString: string) {
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export default function NotificationsClient({ initialNotifications }: Props) {
@@ -159,15 +173,19 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                           <div className="absolute top-0 right-0 w-3 h-3 bg-fuchsia-500 rounded-bl-lg"></div>
                         )}
                       </div>
-
+                      
                       {/* Content */}
                       <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <h3 className={`text-base truncate ${!notif.is_read ? "font-bold text-white" : "font-medium text-zinc-300 group-hover:text-white transition-colors"}`}>
                             {notif.anime_title}
                           </h3>
+                          {/* Display localized exact air and dispatch times */}
                           <p className="text-sm text-zinc-400 mt-0.5">
-                            New episode released!
+                            Aired: {notif.aired_at ? formatAbsoluteTime(notif.aired_at) : "Unknown"}
+                          </p>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Notified: {notif.created_at ? formatAbsoluteTime(notif.created_at) : "Unknown"}
                           </p>
                         </div>
                         

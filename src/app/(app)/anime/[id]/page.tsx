@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { headers, cookies } from "next/headers"; // <-- ADD cookies HERE
+import { headers, cookies } from "next/headers";
 import AnimeDetailClient from "./AnimeDetailClient";
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +13,7 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // 1. Fetch Watchlist Entry
   const { data: watchlistEntry } = await supabase
     .from("watchlist_entries")
     .select("*")
@@ -20,12 +21,25 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     .eq("mal_id", mal_id)
     .single();
 
+  // 2. Fetch User Preferences from Supabase
+  const { data: preferences } = await supabase
+    .from("user_preferences")
+    .select("timezone, notification_format, countdown_enabled")
+    .eq("user_id", user.id)
+    .single();
+
+  // Fallback defaults if preferences don't exist yet
+  const userPrefs = preferences || {
+    timezone: "UTC",
+    notification_format: "sub",
+    countdown_enabled: true
+  };
+
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
   const internalApiUrl = `${protocol}://${host}/api/anilist/anime/${mal_id}`;
   
-  // Grab the user's session cookies
   const cookieStore = await cookies();
   const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
 
@@ -36,7 +50,7 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     const res = await fetch(internalApiUrl, { 
       cache: 'no-store',
       headers: {
-        'Cookie': cookieString // <-- FORWARD COOKIES HERE
+        'Cookie': cookieString
       }
     });
     
@@ -61,5 +75,11 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     );
   }
 
-  return <AnimeDetailClient anime={anilistData} initialEntry={watchlistEntry || null} />;
+  return (
+    <AnimeDetailClient 
+      anime={anilistData} 
+      initialEntry={watchlistEntry || null} 
+      preferences={userPrefs} 
+    />
+  );
 }

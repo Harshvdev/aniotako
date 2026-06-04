@@ -5,11 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
-import { formatAiringTime } from "@/lib/timezone";
+import { formatAiringTime, formatTimeOnly, getCountdownParts } from "@/lib/timezone";
 
 interface Props {
   anime: any;
   initialEntry: any;
+  preferences: {
+    timezone: string;
+    notification_format: string;
+    countdown_enabled: boolean;
+  };
 }
 
 const PRIMARY_GENRES = new Set([
@@ -20,19 +25,16 @@ const PRIMARY_GENRES = new Set([
   "Slice of Life", "Space", "Sports", "Super Power", "Supernatural", "Thriller", "Vampire", "Food"
 ]);
 
-export default function AnimeDetailClient({ anime, initialEntry }: Props) {
+export default function AnimeDetailClient({ anime, initialEntry, preferences }: Props) {
   const router = useRouter();
   const [entry, setEntry] = useState(initialEntry);
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedSyn, setExpandedSyn] = useState(false);
   const [activeTab, setActiveTab] = useState("related");
+  const [countdown, setCountdown] = useState<string>("");
 
   const { getTitle } = useTitleLanguage();
-  
-  const [episodes, setEpisodes] = useState<any[]>([]);
-  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
-  // AniList provides these directly now, so no need to fetch!
   const characters = anime.characters?.edges || [];
   const recommendations = anime.recommendations?.nodes || [];
   const relations = anime.relations?.edges || [];
@@ -40,7 +42,6 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
   const poster = anime.coverImage?.extraLarge || anime.coverImage?.large;
   const banner = anime.bannerImage || poster;
 
-  // Split Genres and Tags based on requested list
   const allTagsAndGenres = Array.from(new Set([
     ...(anime.genres || []),
     ...(anime.tags?.map((t: any) => t.name) || [])
@@ -49,25 +50,52 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
   const displayGenres = allTagsAndGenres.filter(g => PRIMARY_GENRES.has(g));
   const displayTags = allTagsAndGenres.filter(g => !PRIMARY_GENRES.has(g));
 
+  // Determine Safe Total Episode Limit for Trackers
+  const totalEpisodeCount =
+  anime.anime_metadata?.total_episodes ||
+  (Array.isArray(anime.episodes) ? anime.episodes.length : anime.episodes) ||
+  0;
+
+const meta = anime.anime_metadata;
+const format = preferences?.notification_format || "sub";
+const timezone = preferences?.timezone || "UTC";
+
+const targetUnixSeconds: number | null = meta
+  ? format === "raw"
+    ? meta.raw_air_at ?? meta.next_airing_at ?? null
+    : format === "dub"
+      ? meta.dub_air_at ?? meta.next_airing_at ?? null
+      : meta.sub_air_at ?? meta.next_airing_at ?? meta.raw_air_at ?? meta.dub_air_at ?? null
+  : null;
+
   useEffect(() => {
     setEntry(initialEntry);
   }, [initialEntry]);  
 
-  // Jikan is still needed for historical episode lists
+  // Countdown Interval Loop Logic
   useEffect(() => {
-    const fetchEpisodes = async () => {
-      if (activeTab === "episodes" && episodes.length === 0 && anime.idMal) {
-        setLoadingEpisodes(true);
-        try {
-          const res = await fetch(`https://api.jikan.moe/v4/anime/${anime.idMal}/episodes`);
-          const { data } = await res.json();
-          setEpisodes(data || []);
-        } catch (e) { console.error(e); }
-        setLoadingEpisodes(false);
-      }
-    };
-    fetchEpisodes();
-  }, [activeTab, anime.idMal]);
+  if (!targetUnixSeconds || !preferences.countdown_enabled) {
+    setCountdown("");
+    return;
+  }
+
+  const updateTicker = () => {
+    const targetMs = targetUnixSeconds * 1000;
+    const differenceSeconds = Math.floor((targetMs - Date.now()) / 1000);
+
+    if (differenceSeconds <= 0) {
+      setCountdown("Aired / Airing Now");
+      return;
+    }
+
+    const { days, hours, minutes, seconds } = getCountdownParts(differenceSeconds);
+    setCountdown(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+  };
+
+  updateTicker();
+  const intervalId = setInterval(updateTicker, 1000);
+  return () => clearInterval(intervalId);
+}, [targetUnixSeconds, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
     setIsUpdating(true);
@@ -78,7 +106,7 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
         status: "watching",
         score: 0,
         watched_episodes: 0,
-        total_episodes: anime.episodes,
+        total_episodes: totalEpisodeCount,
         poster_url: poster,
       };
 
@@ -132,7 +160,14 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
           </div>
           
           <div className="hidden md:block w-full">
-            <TrackingCard entry={entry} isUpdating={isUpdating} onAdd={handleAdd} onUpdate={handleUpdate} episodes={anime.episodes} />
+            <TrackingCard
+              entry={entry}
+              isUpdating={isUpdating}
+              onAdd={handleAdd}
+              onUpdate={handleUpdate}
+              episodes={totalEpisodeCount}
+              timezone={timezone}
+            />
           </div>
         </div>
 
@@ -164,8 +199,36 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
             </div>
           </div>
 
+          {/* NEXT EPISODE COUNTDOWN CARD */}
+          {anime.anime_metadata && targetUnixSeconds !== null && (
+            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">
+                  Upcoming Broadcast
+                </span>
+                <h3 className="text-xl font-black text-white mt-0.5">
+                  Episode {anime.anime_metadata.next_episode_number ?? "?"}
+                </h3>
+                <span className="text-xs text-zinc-400 block mt-1">
+                  Target ({format.toUpperCase()}): {formatAiringTime(targetUnixSeconds, timezone)} at {formatTimeOnly(targetUnixSeconds, timezone)}
+                </span>
+              </div>
+
+              {preferences.countdown_enabled && countdown && (
+                <div className="sm:text-right shrink-0">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1">
+                    Time Remaining
+                  </span>
+                  <span className="text-sm font-mono font-bold text-cyan-400 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800/80 shadow-inner inline-block">
+                    {countdown}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="md:hidden mt-6 w-full">
-            <TrackingCard entry={entry} isUpdating={isUpdating} onAdd={handleAdd} onUpdate={handleUpdate} episodes={anime.episodes} />
+            <TrackingCard entry={entry} isUpdating={isUpdating} onAdd={handleAdd} onUpdate={handleUpdate} episodes={totalEpisodeCount} />
           </div>
 
           {/* Display Genres */}
@@ -238,7 +301,6 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
           ))}
         </div>
 
-        {/* Tab Content */}
         {/* RELATED TAB */}
         {activeTab === "related" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -273,25 +335,29 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
           </div>
         )}
 
-        {/* EPISODES TAB */}
+        {/* EPISODES TAB (Now using pre-merged server data array) */}
         {activeTab === "episodes" && (
           <div className="flex flex-col gap-2">
-            {loadingEpisodes ? (
-               <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-zinc-800 border-t-fuchsia-500 rounded-full animate-spin"></div></div>
-            ) : episodes.length > 0 ? episodes.map((ep: any) => (
-              <div key={ep.mal_id} className={`flex items-center gap-4 p-4 rounded-xl border ${entry && entry.watched_episodes >= ep.mal_id ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800"}`}>
-                <div className={`w-10 text-center font-mono font-bold ${entry && entry.watched_episodes >= ep.mal_id ? "text-emerald-500" : "text-zinc-500"}`}>
-                  {ep.mal_id}
+            {Array.isArray(anime.episodes) && anime.episodes.length > 0 ? anime.episodes.map((ep: any) => (
+              <div key={ep.episode_number} className={`flex items-center gap-4 p-4 rounded-xl border ${entry && entry.watched_episodes >= ep.episode_number ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800"}`}>
+                <div className={`w-10 text-center font-mono font-bold ${entry && entry.watched_episodes >= ep.episode_number ? "text-emerald-500" : "text-zinc-500"}`}>
+                  {ep.episode_number}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white truncate">{ep.title}</h4>
-                  {ep.title_japanese && <p className="text-xs text-zinc-500 truncate">{ep.title_japanese}</p>}
+                  <h4 className="text-sm font-medium text-white truncate">
+                    {ep.is_placeholder ? `Episode ${ep.episode_number} (Placeholder)` : ep.title || `Episode ${ep.episode_number}`}
+                  </h4>
+                  {ep.airing_at && (
+                    <p className="text-xs text-fuchsia-400 font-bold mt-0.5 animate-pulse">
+                      Airing Schedule Target Set
+                    </p>
+                  )}
                 </div>
                 <div className="shrink-0 text-xs text-zinc-500 font-medium">
-                  {ep.aired ? formatAiringTime(ep.aired) : "TBA"}
+                  {ep.is_placeholder ? "TBA" : ep.aired ? formatAiringTime(ep.aired) : "Released"}
                 </div>
               </div>
-            )) : <p className="text-zinc-500 text-sm">No past episodes listed.</p>}
+            )) : <p className="text-zinc-500 text-sm">No episodes listed.</p>}
           </div>
         )}
 
@@ -340,8 +406,7 @@ export default function AnimeDetailClient({ anime, initialEntry }: Props) {
   );
 }
 
-// --- Tracking Card remains the same as your provided code ---
-function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
+function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone }: any) {
   const [showCompletePrompt, setShowCompletePrompt] = useState(false);
 
   if (!entry) {
@@ -385,7 +450,9 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes }: any) {
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-xl">
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/80">
         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Your List</span>
-        <span className="text-[10px] text-zinc-500 font-medium">Added {formatAiringTime(entry.created_at)}</span>
+        <span className="text-[10px] text-zinc-500 font-medium">
+          Added {formatAiringTime(entry.created_at, timezone)}
+        </span>
       </div>
       <div className="space-y-4">
         <div>

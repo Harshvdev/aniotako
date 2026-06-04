@@ -21,27 +21,38 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     .eq("mal_id", mal_id)
     .single();
 
-  // 2. Fetch User Preferences from Supabase
-  const { data: preferences } = await supabase
-    .from("user_preferences")
-    .select("timezone, notification_format, countdown_enabled")
-    .eq("user_id", user.id)
-    .single();
+    const headersList = await headers();
+  const host = headersList.get("host");
+  const protocol = host?.includes("localhost") ? "http" : "https";
 
-  // Fallback defaults if preferences don't exist yet
+  const cookieStore = await cookies();
+  const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join("; ");
+
+  const preferencesApiUrl = `${protocol}://${host}/api/preferences`;
+
+  let preferences = null;
+  try {
+    const prefsRes = await fetch(preferencesApiUrl, {
+      cache: "no-store",
+      headers: {
+        Cookie: cookieString,
+      },
+    });
+
+    if (prefsRes.ok) {
+      preferences = await prefsRes.json();
+    }
+  } catch (err) {
+    console.error("[PAGE] Failed to load preferences:", err);
+  }
+
   const userPrefs = preferences || {
     timezone: "UTC",
     notification_format: "sub",
-    countdown_enabled: true
+    countdown_enabled: true,
   };
 
-  const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = host?.includes("localhost") ? "http" : "https";
   const internalApiUrl = `${protocol}://${host}/api/anilist/anime/${mal_id}`;
-  
-  const cookieStore = await cookies();
-  const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
 
   let anilistData = null;
   

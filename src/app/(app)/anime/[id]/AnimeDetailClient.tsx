@@ -388,7 +388,7 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium text-white truncate">
-                    {ep.is_placeholder ? `Episode ${ep.episode_number} (Placeholder)` : ep.title || `Episode ${ep.episode_number}`}
+                    {ep.title || `Episode ${ep.episode_number}`}
                   </h4>
                   {ep.airing_at && (
                     <p className="text-xs text-fuchsia-400 font-bold mt-0.5 animate-pulse">
@@ -397,7 +397,17 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                   )}
                 </div>
                 <div className="shrink-0 text-xs text-zinc-500 font-medium">
-                  {ep.is_placeholder ? "TBA" : ep.aired ? formatAiringTime(ep.aired) : "Released"}
+                  {ep.airing_at ? (
+                    <span className="text-fuchsia-400 font-medium">
+                      Scheduled for {formatAiringTime(ep.airing_at, timezone)}
+                    </span>
+                  ) : ep.aired ? (
+                    <span className="text-zinc-500 font-medium">
+                      Released on {formatAiringTime(ep.aired, timezone)}
+                    </span>
+                  ) : (
+                    <span className="text-zinc-500 font-medium">TBA</span>
+                  )}
                 </div>
               </div>
             )) : <p className="text-zinc-500 text-sm">No episodes listed.</p>}

@@ -43,11 +43,10 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    
-    // Whitelist acceptable update fields
+
     const { notification_format, countdown_enabled, title_language, show_adult, timezone } = body;
     const updates: Record<string, any> = {};
-    
+
     if (notification_format !== undefined) updates.notification_format = notification_format;
     if (countdown_enabled !== undefined) updates.countdown_enabled = countdown_enabled;
     if (title_language !== undefined) updates.title_language = title_language;
@@ -56,8 +55,10 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await supabase
       .from("user_preferences")
-      .update(updates)
-      .eq("user_id", user.id)
+      .upsert(
+        { user_id: user.id, ...updates },
+        { onConflict: "user_id" }
+      )
       .select()
       .single();
 
@@ -66,7 +67,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json(data);
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Invalid Request Body" }, { status: 400 });
   }
 }

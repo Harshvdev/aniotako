@@ -76,40 +76,38 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
       label: "Dub",
       unix: meta?.dub_air_at ?? null,
     },
-  ].filter((slot) => slot.unix !== null) as Array<{
-    key: string;
-    label: string;
-    unix: number;
-  }>;
+  ]
+    .filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null)
+    .sort((a, b) => a.unix - b.unix);
+
+  const nextSlot = airingSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) || airingSlots[0] || null;
 
   useEffect(() => {
     setEntry(initialEntry);
-  }, [initialEntry]);  
+  }, [initialEntry]);
 
-  // Countdown Interval Loop Logic
   useEffect(() => {
-  if (!preferences.countdown_enabled || airingSlots.length === 0) {
-    setCountdown("");
-    return;
-  }
-
-  const updateTicker = () => {
-    const first = airingSlots[0];
-    const differenceSeconds = Math.floor(first.unix - Date.now() / 1000);
-
-    if (differenceSeconds <= 0) {
-      setCountdown("Aired / Airing Now");
+    if (!preferences.countdown_enabled || !nextSlot) {
+      setCountdown("");
       return;
     }
 
-    const { days, hours, minutes, seconds } = getCountdownParts(differenceSeconds);
-    setCountdown(`${days}d ${hours}h ${minutes}m ${seconds}s`);
-  };
+    const updateTicker = () => {
+      const differenceSeconds = Math.floor(nextSlot.unix - Date.now() / 1000);
 
-  updateTicker();
-  const intervalId = setInterval(updateTicker, 1000);
-  return () => clearInterval(intervalId);
-}, [airingSlots, preferences.countdown_enabled]);
+      if (differenceSeconds <= 0) {
+        setCountdown("Aired / Airing Now");
+        return;
+      }
+
+      const { days, hours, minutes, seconds } = getCountdownParts(differenceSeconds);
+      setCountdown(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+    };
+
+    updateTicker();
+    const intervalId = setInterval(updateTicker, 1000);
+    return () => clearInterval(intervalId);
+  }, [nextSlot?.unix, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
     setIsUpdating(true);
@@ -223,6 +221,11 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                 <h3 className="text-xl font-black text-white mt-0.5">
                   Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? anime.nextAiringEpisode?.episode ?? "?"}
                 </h3>
+                {preferences.countdown_enabled && nextSlot && (
+                <div className="mb-3 text-sm font-mono font-bold text-cyan-400">
+                  {nextSlot.label}: {countdown}
+                </div>
+                )}
               </div>
 
               <div className="grid gap-2">

@@ -209,7 +209,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       if (nextEpisodeNumber && i < nextEpisodeNumber) {
         mergedEpisodes.push({
           episode_number: i,
-          title: `Episode ${i} (Placeholder)`,
+          title: `Episode ${i}`,
           is_placeholder: true,
         });
       }

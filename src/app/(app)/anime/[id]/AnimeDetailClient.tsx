@@ -56,17 +56,36 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
   (Array.isArray(anime.episodes) ? anime.episodes.length : anime.episodes) ||
   0;
 
-const meta = anime.anime_metadata;
-const format = preferences?.notification_format || "sub";
-const timezone = preferences?.timezone || "UTC";
+  const meta = anime.anime_metadata;
+  const format = preferences?.notification_format || "sub";
+  const timezone = preferences?.timezone || "UTC";
 
-const targetUnixSeconds: number | null = meta
-  ? format === "raw"
-    ? meta.raw_air_at ?? meta.next_airing_at ?? null
-    : format === "dub"
-      ? meta.dub_air_at ?? meta.next_airing_at ?? null
-      : meta.sub_air_at ?? meta.next_airing_at ?? meta.raw_air_at ?? meta.dub_air_at ?? null
-  : null;
+  const nextAiringUnix =
+    meta?.next_airing_at ??
+    anime.nextAiringEpisode?.airingAt ??
+    null;
+
+  const airingSlots = [
+    {
+      key: "raw",
+      label: "Raw",
+      unix: meta?.raw_air_at ?? nextAiringUnix,
+    },
+    {
+      key: "sub",
+      label: "Sub",
+      unix: meta?.sub_air_at ?? nextAiringUnix,
+    },
+    {
+      key: "dub",
+      label: "Dub",
+      unix: meta?.dub_air_at ?? nextAiringUnix,
+    },
+  ].filter((slot) => slot.unix !== null) as Array<{
+    key: string;
+    label: string;
+    unix: number;
+  }>;
 
   useEffect(() => {
     setEntry(initialEntry);
@@ -74,14 +93,14 @@ const targetUnixSeconds: number | null = meta
 
   // Countdown Interval Loop Logic
   useEffect(() => {
-  if (!targetUnixSeconds || !preferences.countdown_enabled) {
+  if (!preferences.countdown_enabled || airingSlots.length === 0) {
     setCountdown("");
     return;
   }
 
   const updateTicker = () => {
-    const targetMs = targetUnixSeconds * 1000;
-    const differenceSeconds = Math.floor((targetMs - Date.now()) / 1000);
+    const first = airingSlots[0];
+    const differenceSeconds = Math.floor(first.unix - Date.now() / 1000);
 
     if (differenceSeconds <= 0) {
       setCountdown("Aired / Airing Now");
@@ -95,7 +114,7 @@ const targetUnixSeconds: number | null = meta
   updateTicker();
   const intervalId = setInterval(updateTicker, 1000);
   return () => clearInterval(intervalId);
-}, [targetUnixSeconds, preferences.countdown_enabled]);
+}, [airingSlots, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
     setIsUpdating(true);
@@ -200,30 +219,47 @@ const targetUnixSeconds: number | null = meta
           </div>
 
           {/* NEXT EPISODE COUNTDOWN CARD */}
-          {anime.anime_metadata && targetUnixSeconds !== null && (
-            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+          {airingSlots.length > 0 && (
+            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl">
+              <div className="mb-3">
                 <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">
-                  Upcoming Broadcast
+                  Next Episode Schedule
                 </span>
                 <h3 className="text-xl font-black text-white mt-0.5">
-                  Episode {anime.anime_metadata.next_episode_number ?? "?"}
+                  Episode {anime.anime_metadata?.next_episode_number ?? anime.nextAiringEpisode?.episode ?? "?"}
                 </h3>
-                <span className="text-xs text-zinc-400 block mt-1">
-                  Target ({format.toUpperCase()}): {formatAiringTime(targetUnixSeconds, timezone)} at {formatTimeOnly(targetUnixSeconds, timezone)}
-                </span>
               </div>
 
-              {preferences.countdown_enabled && countdown && (
-                <div className="sm:text-right shrink-0">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1">
-                    Time Remaining
-                  </span>
-                  <span className="text-sm font-mono font-bold text-cyan-400 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800/80 shadow-inner inline-block">
-                    {countdown}
-                  </span>
-                </div>
-              )}
+              <div className="grid gap-2">
+                {airingSlots.map((slot) => {
+                  const remaining = Math.max(0, Math.floor(slot.unix - Date.now() / 1000));
+                  const parts = getCountdownParts(remaining);
+                  const scheduledText = formatAiringTime(slot.unix, timezone);
+                  const timeText = formatTimeOnly(slot.unix, timezone);
+
+                  return (
+                    <div
+                      key={slot.key}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
+                    >
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+                          {slot.label}
+                        </div>
+                        <div className="text-sm text-zinc-300 mt-1">
+                          {scheduledText} at {timeText}
+                        </div>
+                      </div>
+
+                      {preferences.countdown_enabled && (
+                        <div className="text-sm font-mono font-bold text-cyan-400">
+                          {remaining <= 0 ? "Aired / Airing Now" : `${parts.days}d ${parts.hours}h ${parts.minutes}m ${parts.seconds}s`}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

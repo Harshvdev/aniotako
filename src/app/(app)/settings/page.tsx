@@ -98,7 +98,11 @@ export default function SettingsPage() {
       // Load Timezone
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       setResolvedTz(browserTz);
-      setTimezone(localStorage.getItem("aniotako_timezone") || "");
+      setTimezone(
+        prefsData?.timezone ||
+        localStorage.getItem("aniotako_timezone") ||
+        ""
+      );
 
       // Load Push Status
       if ("Notification" in window && "serviceWorker" in navigator) {

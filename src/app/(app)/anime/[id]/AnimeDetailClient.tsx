@@ -60,26 +60,21 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
   const format = preferences?.notification_format || "sub";
   const timezone = preferences?.timezone || "UTC";
 
-  const nextAiringUnix =
-    meta?.next_airing_at ??
-    anime.nextAiringEpisode?.airingAt ??
-    null;
-
   const airingSlots = [
     {
       key: "raw",
       label: "Raw",
-      unix: meta?.raw_air_at ?? nextAiringUnix,
+      unix: meta?.raw_air_at ?? null,
     },
     {
       key: "sub",
       label: "Sub",
-      unix: meta?.sub_air_at ?? nextAiringUnix,
+      unix: meta?.sub_air_at ?? null,
     },
     {
       key: "dub",
       label: "Dub",
-      unix: meta?.dub_air_at ?? nextAiringUnix,
+      unix: meta?.dub_air_at ?? null,
     },
   ].filter((slot) => slot.unix !== null) as Array<{
     key: string;
@@ -226,16 +221,15 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                   Next Episode Schedule
                 </span>
                 <h3 className="text-xl font-black text-white mt-0.5">
-                  Episode {anime.anime_metadata?.next_episode_number ?? anime.nextAiringEpisode?.episode ?? "?"}
+                  Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? anime.nextAiringEpisode?.episode ?? "?"}
                 </h3>
               </div>
 
               <div className="grid gap-2">
                 {airingSlots.map((slot) => {
-                  const remaining = Math.max(0, Math.floor(slot.unix - Date.now() / 1000));
-                  const parts = getCountdownParts(remaining);
-                  const scheduledText = formatAiringTime(slot.unix, timezone);
-                  const timeText = formatTimeOnly(slot.unix, timezone);
+                  const remainingSeconds = Math.floor(slot.unix - Date.now() / 1000);
+                  const parts = getCountdownParts(remainingSeconds);
+                  const isLive = remainingSeconds <= 0;
 
                   return (
                     <div
@@ -247,13 +241,15 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                           {slot.label}
                         </div>
                         <div className="text-sm text-zinc-300 mt-1">
-                          {scheduledText} at {timeText}
+                          {formatAiringTime(slot.unix, timezone)} at {formatTimeOnly(slot.unix, timezone)}
                         </div>
                       </div>
 
                       {preferences.countdown_enabled && (
                         <div className="text-sm font-mono font-bold text-cyan-400">
-                          {remaining <= 0 ? "Aired / Airing Now" : `${parts.days}d ${parts.hours}h ${parts.minutes}m ${parts.seconds}s`}
+                          {isLive
+                            ? "Aired / Airing Now"
+                            : `${parts.days}d ${parts.hours}h ${parts.minutes}m ${parts.seconds}s`}
                         </div>
                       )}
                     </div>

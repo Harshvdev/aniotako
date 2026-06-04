@@ -158,17 +158,29 @@ export async function GET(req: NextRequest) {
           : null;
 
         for (const f of formats) {
-          // Internal Deduplication Check: Look back 12 hours
-          const { data: duplicateNotification } = await supabase
-            .from("notifications")
-            .select("id")
-            .eq("episode", show.episodeNumber)
-            .eq("format", f.format)
-            .or(`anilist_id.eq.${anilistId},mal_id.eq.${malId}`)
-            .gte("created_at", twelveHoursAgo)
-            .maybeSingle();
+          // 1. Build a unique, stable event key string
+          const eventKey = `${malId}:${show.episodeNumber}:${f.format}:${f.timestamp}`;
 
-          if (duplicateNotification) continue; // Skip redundant pipelines
+          // 2. Try to register this global event ledger row
+          const { error: insertEventError } = await supabase
+            .from("notification_events")
+            .insert({
+              event_key: eventKey,
+              anilist_id: anilistId,
+              mal_id: malId,
+              episode_number: show.episodeNumber,
+              format: f.format,
+              aired_at: new Date(f.timestamp! * 1000).toISOString(),
+            });
+
+          // 3. Handle Unique Key Constraint Violations (Postgres Error Code 23505)
+          if (insertEventError) {
+            if (insertEventError.code === "23505") {
+              // This episode format was already registered/dispatched before. Skip it!
+              continue;
+            }
+            throw insertEventError; // Fail loudly for other database runtime issues
+          }
 
           // Dispatch Message payload to Upstash holding zones
           await qstash.publishJSON({

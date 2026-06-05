@@ -25,33 +25,64 @@ function getTzAbbr(date: Date, timezone: string): string {
   return tzPart ? tzPart.value : '';
 }
 
+function normalizeDateInput(dateInput: number | string): Date {
+  if (typeof dateInput === "number") {
+    return new Date(dateInput * 1000);
+  }
+
+  const trimmed = dateInput.trim();
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return new Date(Number(trimmed) * 1000);
+  }
+
+  return new Date(trimmed);
+}
+
 export function formatAiringTime(dateInput: number | string, tz?: string): string {
   const timezone = tz || getUserTimezone();
-  const date = typeof dateInput === 'number' ? new Date(dateInput * 1000) : new Date(dateInput);
-  
-  const baseDate = date.toLocaleString('en-US', { 
-    timeZone: timezone, 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit'
+  const date = normalizeDateInput(dateInput);
+
+  if (Number.isNaN(date.getTime())) return "TBA";
+
+  const baseDate = date.toLocaleString("en-US", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   return `${baseDate} ${getTzAbbr(date, timezone)}`;
 }
 
-export function formatTimeOnly(unixSeconds: number, tz?: string): string {
+export function formatTimeOnly(unixSeconds: number | string, tz?: string): string {
   const timezone = tz || getUserTimezone();
-  const date = new Date(unixSeconds * 1000);
-  
-  const baseTime = date.toLocaleTimeString('en-US', { 
-    timeZone: timezone, 
-    hour: '2-digit', 
-    minute: '2-digit'
+  const date = normalizeDateInput(unixSeconds);
+
+  if (Number.isNaN(date.getTime())) return "TBA";
+
+  const baseTime = date.toLocaleTimeString("en-US", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   return `${baseTime} ${getTzAbbr(date, timezone)}`;
+}
+
+export function formatDateOnly(dateInput: number | string, tz?: string): string {
+  const timezone = tz || getUserTimezone();
+  const date = normalizeDateInput(dateInput);
+
+  if (Number.isNaN(date.getTime())) return "TBA";
+
+  return date.toLocaleDateString("en-US", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**

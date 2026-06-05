@@ -58,7 +58,21 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
 
   const meta = anime.anime_metadata;
   const format = preferences?.notification_format || "sub";
-  const timezone = preferences?.timezone || "UTC";
+  const [timezone, setTimezone] = useState("UTC");
+
+  useEffect(() => {
+    const storedTz =
+      typeof window !== "undefined"
+        ? localStorage.getItem("aniotako_timezone")
+        : null;
+
+    const browserTz =
+      typeof window !== "undefined"
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+        : "UTC";
+
+    setTimezone(preferences?.timezone || storedTz || browserTz || "UTC");
+  }, [preferences?.timezone]);
 
   const airingSlots = [
     {
@@ -93,20 +107,20 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
     }
 
     const updateTicker = () => {
-      const differenceSeconds = Math.floor(nextSlot.unix - Date.now() / 1000);
+      const remainingSeconds = Math.floor(nextSlot.unix - Date.now() / 1000);
 
-      if (differenceSeconds <= 0) {
+      if (remainingSeconds <= 0) {
         setCountdown("Aired / Airing Now");
         return;
       }
 
-      const { days, hours, minutes, seconds } = getCountdownParts(differenceSeconds);
+      const { days, hours, minutes, seconds } = getCountdownParts(remainingSeconds);
       setCountdown(`${days}d ${hours}h ${minutes}m ${seconds}s`);
     };
 
     updateTicker();
-    const intervalId = setInterval(updateTicker, 1000);
-    return () => clearInterval(intervalId);
+    const intervalId = window.setInterval(updateTicker, 1000);
+    return () => window.clearInterval(intervalId);
   }, [nextSlot?.unix, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
@@ -222,9 +236,9 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                   Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? anime.nextAiringEpisode?.episode ?? "?"}
                 </h3>
                 {preferences.countdown_enabled && nextSlot && (
-                <div className="mb-3 text-sm font-mono font-bold text-cyan-400">
-                  {nextSlot.label}: {countdown}
-                </div>
+                  <div className="mb-3 min-h-[1.25rem] text-sm font-mono font-bold text-cyan-400">
+                    {nextSlot.label}: {countdown || "Calculating..."}
+                  </div>
                 )}
               </div>
 

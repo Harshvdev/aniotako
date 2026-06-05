@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
-import { formatAiringTime, formatTimeOnly, getCountdownParts } from "@/lib/timezone";
+import { formatAiringTime, formatDateOnly, formatTimeOnly, getCountdownParts } from "@/lib/timezone";
 
 interface Props {
   anime: any;
@@ -74,27 +74,36 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
     setTimezone(preferences?.timezone || storedTz || browserTz || "UTC");
   }, [preferences?.timezone]);
 
-  const airingSlots = [
-    {
-      key: "raw",
-      label: "Raw",
-      unix: meta?.raw_air_at ?? null,
-    },
-    {
-      key: "sub",
-      label: "Sub",
-      unix: meta?.sub_air_at ?? null,
-    },
-    {
-      key: "dub",
-      label: "Dub",
-      unix: meta?.dub_air_at ?? null,
-    },
-  ]
-    .filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null)
-    .sort((a, b) => a.unix - b.unix);
+  const normalizeUnix = (value: number | string | null | undefined): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
-  const nextSlot = airingSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) || airingSlots[0] || null;
+const airingSlots = [
+  {
+    key: "raw",
+    label: "Raw",
+    unix: normalizeUnix(meta?.raw_air_at),
+  },
+  {
+    key: "sub",
+    label: "Sub",
+    unix: normalizeUnix(meta?.sub_air_at),
+  },
+  {
+    key: "dub",
+    label: "Dub",
+    unix: normalizeUnix(meta?.dub_air_at),
+  },
+]
+  .filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null)
+  .sort((a, b) => a.unix - b.unix);
+
+const nextSlot =
+  airingSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) ||
+  airingSlots[0] ||
+  null;
 
   useEffect(() => {
     setEntry(initialEntry);
@@ -416,7 +425,7 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
                     </span>
                   ) : ep.aired ? (
                     <span className="text-zinc-500 font-medium">
-                      Released on {formatAiringTime(ep.aired, timezone)}
+                      Released on {formatDateOnly(ep.aired, timezone)}
                     </span>
                   ) : (
                     <span className="text-zinc-500 font-medium">TBA</span>

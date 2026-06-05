@@ -74,35 +74,40 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
     setTimezone(preferences?.timezone || storedTz || browserTz || "UTC");
   }, [preferences?.timezone]);
 
-  const normalizeUnix = (value: number | string | null | undefined): number | null => {
+const normalizeUnix = (value: unknown): number | null => {
   if (value === null || value === undefined || value === "") return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
+
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
 };
 
+const nextAiringUnix = normalizeUnix(anime.nextAiringEpisode?.airingAt);
+const nextAiringEpisodeNum = anime.nextAiringEpisode?.episode ?? null;
+
+const rawUnix =
+  normalizeUnix(meta?.raw_air_at) ??
+  nextAiringUnix ??
+  null;
+
+const subUnix = normalizeUnix(meta?.sub_air_at);
+const dubUnix = normalizeUnix(meta?.dub_air_at);
+
 const airingSlots = [
-  {
-    key: "raw",
-    label: "Raw",
-    unix: normalizeUnix(meta?.raw_air_at),
-  },
-  {
-    key: "sub",
-    label: "Sub",
-    unix: normalizeUnix(meta?.sub_air_at),
-  },
-  {
-    key: "dub",
-    label: "Dub",
-    unix: normalizeUnix(meta?.dub_air_at),
-  },
-]
-  .filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null)
-  .sort((a, b) => a.unix - b.unix);
+  { key: "raw", label: "Raw", unix: rawUnix },
+  { key: "sub", label: "Sub", unix: subUnix },
+  { key: "dub", label: "Dub", unix: dubUnix },
+].filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null);
+
+const visibleSlots =
+  airingSlots.length > 0
+    ? airingSlots
+    : nextAiringUnix
+      ? [{ key: "next", label: "Next", unix: nextAiringUnix }]
+      : [];
 
 const nextSlot =
-  airingSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) ||
-  airingSlots[0] ||
+  visibleSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) ||
+  visibleSlots[0] ||
   null;
 
   useEffect(() => {
@@ -235,14 +240,14 @@ const nextSlot =
           </div>
 
           {/* NEXT EPISODE COUNTDOWN CARD */}
-          {airingSlots.length > 0 && (
+          {visibleSlots.length > 0 && (
             <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl">
               <div className="mb-3">
                 <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">
                   Next Episode Schedule
                 </span>
                 <h3 className="text-xl font-black text-white mt-0.5">
-                  Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? anime.nextAiringEpisode?.episode ?? "?"}
+                  Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? nextAiringEpisodeNum ?? "?"}
                 </h3>
                 {preferences.countdown_enabled && nextSlot && (
                   <div className="mb-3 min-h-[1.25rem] text-sm font-mono font-bold text-cyan-400">

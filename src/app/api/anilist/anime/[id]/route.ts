@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import https from "https";
 
 const ANILIST_QUERY = `
   query ($idMal: Int) {
@@ -43,6 +44,37 @@ const ANILIST_QUERY = `
     }
   }
 `;
+
+const fetchIPv4Json = (url: string, timeoutMs: number = 4000): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { family: 4 }, (res) => {
+      if (res.statusCode === 429) return reject(new Error("Jikan rate limited"));
+      if (res.statusCode === 404) return reject(new Error("Jikan not found"));
+      if (res.statusCode && res.statusCode !== 200) {
+        return reject(new Error(`Jikan HTTP ${res.statusCode}`));
+      }
+
+      let raw = "";
+      res.on("data", (chunk) => {
+        raw += chunk;
+      });
+
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          reject(new Error("Jikan JSON parse failed"));
+        }
+      });
+    });
+
+    req.on("error", reject);
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error("Jikan timeout"));
+    });
+  });
+};
 
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -175,31 +207,10 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     // 3. Fetch Historical Episodes from Jikan
     let jikanEpisodes: any[] = [];
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-
-      try {
-        const jikanResponse = await fetch(
-          `https://api.jikan.moe/v4/anime/${mal_id}/episodes`,
-          {
-            signal: controller.signal,
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        );
-
-        if (jikanResponse.ok) {
-          const jikanJson = await jikanResponse.json();
-          jikanEpisodes = jikanJson.data || [];
-        } else {
-          console.warn(`[API] Jikan returned HTTP ${jikanResponse.status} for episodes`);
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
+      const jikanJson = await fetchIPv4Json(`https://api.jikan.moe/v4/anime/${mal_id}/episodes`, 4000);
+      jikanEpisodes = jikanJson?.data || [];
     } catch (jikanError) {
-      console.error("[API] Failed to fetch historical episodes from Jikan:", jikanError);
+      console.warn(`[API] Jikan episodes unavailable for ${mal_id}:`, jikanError);
     }
 
     // 4. Fill Missing Episodes & Merge Logic

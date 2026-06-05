@@ -73,10 +73,18 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Step 3: Filter Against Users' Current Watchlists ---
-    // Emulates the targeted distinct join query to locate watched metadata records
     const { data: watchedRows, error: dbError } = await supabase
       .from("anime_metadata")
-      .select("anilist_id, mal_id, watchlist_entries!inner(status)")
+      .select(`
+        anilist_id,
+        mal_id,
+        title,
+        title_english,
+        title_romaji,
+        title_native,
+        anilist_raw,
+        watchlist_entries!inner(status)
+      `)
       .eq("watchlist_entries.status", "watching")
       .not("anilist_id", "is", null);
 
@@ -84,24 +92,180 @@ export async function GET(req: NextRequest) {
 
     const watchedAnilistIds = new Set<number>();
     const anilistToMalMap = new Map<number, number>();
+    const watchedTitleToAnilistId = new Map<string, number>();
+
+    const normalizeText = (value: unknown) =>
+      String(value ?? "")
+        .toLowerCase()
+        .replace(/&/g, "and")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
+        .replace(/\s+/g, " ");
+
+    const addWatchedTitle = (title: unknown, anilistId: number) => {
+      const key = normalizeText(title);
+      if (key.length >= 3) {
+        watchedTitleToAnilistId.set(key, anilistId);
+      }
+    };
+
+    const getDeepStrings = (value: unknown, seen = new WeakSet<object>()): string[] => {
+      const out: string[] = [];
+
+      const walk = (v: unknown) => {
+        if (v === null || v === undefined) return;
+
+        if (typeof v === "string") {
+          out.push(v);
+          return;
+        }
+
+        if (typeof v === "number" || typeof v === "boolean") {
+          out.push(String(v));
+          return;
+        }
+
+        if (Array.isArray(v)) {
+          v.forEach(walk);
+          return;
+        }
+
+        if (typeof v === "object") {
+          const obj = v as Record<string, unknown>;
+          if (seen.has(obj)) return;
+          seen.add(obj);
+          Object.values(obj).forEach(walk);
+        }
+      };
+
+      walk(value);
+      return Array.from(new Set(out));
+    };
 
     watchedRows?.forEach((row: any) => {
-      watchedAnilistIds.add(row.anilist_id);
-      anilistToMalMap.set(row.anilist_id, row.mal_id);
+      const anilistId = Number(row.anilist_id);
+      const malId = Number(row.mal_id);
+
+      if (Number.isFinite(anilistId)) {
+        watchedAnilistIds.add(anilistId);
+        anilistToMalMap.set(anilistId, malId);
+
+        addWatchedTitle(row.title, anilistId);
+        addWatchedTitle(row.title_english, anilistId);
+        addWatchedTitle(row.title_romaji, anilistId);
+        addWatchedTitle(row.title_native, anilistId);
+
+        const rawTitles = getDeepStrings(row.anilist_raw);
+        for (const t of rawTitles) {
+          const norm = normalizeText(t);
+          if (norm.length >= 3 && norm.length <= 120 && !norm.includes("http") && !/^\d+$/.test(norm)) {
+            watchedTitleToAnilistId.set(norm, anilistId);
+          }
+        }
+      }
     });
 
-    // Parse AniList ID and cross-reference with watchlists
-    const matchedShows = allTimetableShows.filter((show: any) => {
-      const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
-      if (!anilistWeb) return false;
-      
-      const match = anilistWeb.url.match(/anime\/(\d+)/);
-      if (!match) return false;
+    const extractAniListId = (show: any): number | null => {
+      const numericKeys = ["anilistId", "anilist_id", "mediaId", "media_id", "animeId", "anime_id"];
+      for (const key of numericKeys) {
+        const val = Number(show?.[key]);
+        if (Number.isFinite(val)) return val;
+      }
 
-      const id = parseInt(match[1], 10);
-      show.parsedAnilistId = id; // Inject for usage in downstream loops
-      return watchedAnilistIds.has(id);
-    });
+      const candidateStrings = [
+        ...getDeepStrings(show),
+        String(show?.websites ?? ""),
+        String(show?.links ?? ""),
+        String(show?.externalLinks ?? ""),
+        String(show?.urls ?? ""),
+        String(show?.website ?? ""),
+        String(show?.link ?? ""),
+        String(show?.url ?? ""),
+      ];
+
+      for (const text of candidateStrings) {
+        const match =
+          text.match(/anilist\.co\/anime\/(\d+)/i) ||
+          text.match(/anilist\.com\/anime\/(\d+)/i) ||
+          text.match(/anime\/(\d+)/i);
+
+        if (match) return parseInt(match[1], 10);
+      }
+
+      return null;
+    };
+
+    const extractShowTitles = (show: any): string[] => {
+      const titles = [
+        show?.title,
+        show?.name,
+        show?.animeTitle,
+        show?.anime_title,
+        show?.englishTitle,
+        show?.romajiTitle,
+        show?.seriesTitle,
+        show?.mediaTitle,
+        show?.anime?.title,
+        show?.anime?.name,
+        show?.anime?.titleEnglish,
+        show?.anime?.titleRomaji,
+        show?.anime?.titleNative,
+        show?.anime?.titles?.romaji,
+        show?.anime?.titles?.english,
+        show?.anime?.titles?.native,
+        show?.anime?.title?.romaji,
+        show?.anime?.title?.english,
+        show?.anime?.title?.native,
+      ];
+
+      return Array.from(
+        new Set(
+          titles
+            .map(normalizeText)
+            .filter((t) => t.length >= 3)
+        )
+      );
+    };
+
+    const matchedShows = allTimetableShows
+      .map((show: any) => {
+        const anilistId = extractAniListId(show);
+
+        if (anilistId && watchedAnilistIds.has(anilistId)) {
+          show.parsedAnilistId = anilistId;
+          return show;
+        }
+
+        for (const title of extractShowTitles(show)) {
+          const mappedId = watchedTitleToAnilistId.get(title);
+          if (mappedId) {
+            show.parsedAnilistId = mappedId;
+            return show;
+          }
+        }
+
+        return null;
+      })
+      .filter(Boolean) as any[];
+
+    console.log(
+      `[CRON] timetable=${allTimetableShows.length} watched=${watchedAnilistIds.size} matched=${matchedShows.length}`
+    );
+
+    if (allTimetableShows.length > 0) {
+      console.log("[CRON] first timetable keys:", Object.keys(allTimetableShows[0] || {}));
+      console.log(
+        "[CRON] first timetable sample:",
+        JSON.stringify(allTimetableShows[0] || {}, null, 2).slice(0, 4000)
+      );
+    }
+
+    if (matchedShows.length > 0) {
+      console.log(
+        "[CRON] sample matched show:",
+        JSON.stringify(matchedShows[0], null, 2).slice(0, 4000)
+      );
+    }
 
     // --- Summary State Trackers ---
     let inWindowCount = 0;
@@ -133,10 +297,14 @@ export async function GET(req: NextRequest) {
           next_airing_at: toUnix(show.episodeDate),
           schedule_updated_at: now.toISOString(),
         },
-        { onConflict: "anilist_id" }
+        { onConflict: "mal_id" }
       );
 
-      if (!upsertError) cacheUpdatedCount++;
+      if (upsertError) {
+        console.error("[CRON] upsert failed for MAL", malId, upsertError);
+      } else {
+        cacheUpdatedCount++;
+      }
 
       // Step 6: Only queue notifications when the episode is inside the processing window
       if (epDate < windowStart || epDate > windowEnd) {
@@ -204,6 +372,8 @@ export async function GET(req: NextRequest) {
     // --- Step 7: Final Metric Assertions ---
     return NextResponse.json({
       shows_scanned: allTimetableShows.length,
+      watched_anilist_ids: watchedAnilistIds.size,
+      matched_shows: matchedShows.length,
       in_window: inWindowCount,
       queued: queuedStats,
       cache_updated: cacheUpdatedCount,

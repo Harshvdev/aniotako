@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { headers, cookies } from "next/headers";
+import { headers, cookies } from "next/headers"; // Kept for the AniList internal fetch
 import AnimeDetailClient from "./AnimeDetailClient";
 
 export const dynamic = 'force-dynamic';
@@ -21,39 +21,28 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     .eq("mal_id", mal_id)
     .single();
 
-    const headersList = await headers();
+  // 2. Direct Database Query for Preferences (As recommended)
+  const { data: prefsRow } = await supabase
+    .from("user_preferences")
+    .select("timezone, notification_format, countdown_enabled")
+    .eq("user_id", user.id)
+    .single();
+
+  const userPrefs = prefsRow || {
+    timezone: "",
+    notification_format: "sub",
+    countdown_enabled: true,
+  };
+
+  // 3. Reconstruct connection details ONLY for the AniList internal fetch
+  const headersList = await headers();
   const host = headersList.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
 
   const cookieStore = await cookies();
   const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join("; ");
 
-  const preferencesApiUrl = `${protocol}://${host}/api/preferences`;
-
-  let preferences = null;
-  try {
-    const prefsRes = await fetch(preferencesApiUrl, {
-      cache: "no-store",
-      headers: {
-        Cookie: cookieString,
-      },
-    });
-
-    if (prefsRes.ok) {
-      preferences = await prefsRes.json();
-    }
-  } catch (err) {
-    console.error("[PAGE] Failed to load preferences:", err);
-  }
-
-  const userPrefs = preferences || {
-    timezone: "UTC",
-    notification_format: "sub",
-    countdown_enabled: true,
-  };
-
   const internalApiUrl = `${protocol}://${host}/api/anilist/anime/${mal_id}`;
-
   let anilistData = null;
   
   try {

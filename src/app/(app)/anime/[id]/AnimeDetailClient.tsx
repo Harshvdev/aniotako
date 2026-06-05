@@ -17,6 +17,13 @@ interface Props {
   };
 }
 
+type AiringSlot = {
+  key: "raw" | "sub" | "dub";
+  label: string;
+  unix: number;
+  episode: number | null;
+};
+
 const PRIMARY_GENRES = new Set([
   "Action", "Adventure", "Cars", "Comedy", "Dementia", "Demons", "Drama", "Ecchi", "Fantasy", 
   "Game", "Harem", "Historical", "Horror", "Isekai", "Josei", "Kids", "Magic", "Martial Arts", 
@@ -31,7 +38,7 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedSyn, setExpandedSyn] = useState(false);
   const [activeTab, setActiveTab] = useState("related");
-  const [countdown, setCountdown] = useState<string>("");
+  const [countdowns, setCountdowns] = useState<Record<string, string>>({});
 
   const { getTitle } = useTitleLanguage();
 
@@ -52,12 +59,11 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
 
   // Determine Safe Total Episode Limit for Trackers
   const totalEpisodeCount =
-  anime.anime_metadata?.total_episodes ||
-  (Array.isArray(anime.episodes) ? anime.episodes.length : anime.episodes) ||
-  0;
+    anime.anime_metadata?.total_episodes ||
+    (Array.isArray(anime.episodes) ? anime.episodes.length : anime.episodes) ||
+    0;
 
   const meta = anime.anime_metadata;
-  const format = preferences?.notification_format || "sub";
   const [timezone, setTimezone] = useState("UTC");
 
   useEffect(() => {
@@ -74,68 +80,75 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
     setTimezone(preferences?.timezone || storedTz || browserTz || "UTC");
   }, [preferences?.timezone]);
 
-const normalizeUnix = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === "") return null;
+  const normalizeUnix = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === "") return null;
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
 
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : null;
-};
+  const formatCountdown = (remainingSeconds: number) => {
+    if (remainingSeconds <= 0) return "Aired / Airing Now";
+    const { days, hours, minutes, seconds } = getCountdownParts(remainingSeconds);
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  };
 
-const nextAiringUnix = normalizeUnix(anime.nextAiringEpisode?.airingAt);
-const nextAiringEpisodeNum = anime.nextAiringEpisode?.episode ?? null;
+  const nextAiringUnix = normalizeUnix(anime.nextAiringEpisode?.airingAt);
+  const nextAiringEpisodeNum = anime.nextAiringEpisode?.episode ?? null;
 
-const rawUnix =
-  normalizeUnix(meta?.raw_air_at) ??
-  nextAiringUnix ??
-  null;
+  const rawUnix = normalizeUnix(meta?.raw_air_at) ?? nextAiringUnix ?? null;
+  const subUnix = normalizeUnix(meta?.sub_air_at);
+  const dubUnix = normalizeUnix(meta?.dub_air_at);
 
-const subUnix = normalizeUnix(meta?.sub_air_at);
-const dubUnix = normalizeUnix(meta?.dub_air_at);
+  // Future-proof episode fields fallback sequence
+  const rawEpisodeNumber =
+    normalizeUnix(meta?.raw_episode_number) ??
+    normalizeUnix(meta?.raw_next_episode_number) ??
+    normalizeUnix(meta?.next_episode_number) ??
+    nextAiringEpisodeNum;
 
-const airingSlots = [
-  { key: "raw", label: "Raw", unix: rawUnix },
-  { key: "sub", label: "Sub", unix: subUnix },
-  { key: "dub", label: "Dub", unix: dubUnix },
-].filter((slot): slot is { key: string; label: string; unix: number } => slot.unix !== null);
+  const subEpisodeNumber =
+    normalizeUnix(meta?.sub_episode_number) ??
+    normalizeUnix(meta?.sub_next_episode_number) ??
+    normalizeUnix(meta?.next_episode_number) ??
+    rawEpisodeNumber;
 
-const visibleSlots =
-  airingSlots.length > 0
-    ? airingSlots
-    : nextAiringUnix
-      ? [{ key: "next", label: "Next", unix: nextAiringUnix }]
-      : [];
+  const dubEpisodeNumber =
+    normalizeUnix(meta?.dub_episode_number) ??
+    normalizeUnix(meta?.dub_next_episode_number) ??
+    normalizeUnix(meta?.next_episode_number) ??
+    rawEpisodeNumber;
 
-const nextSlot =
-  visibleSlots.find((slot) => slot.unix > Math.floor(Date.now() / 1000)) ||
-  visibleSlots[0] ||
-  null;
+  const airingSlots: AiringSlot[] = [
+    { key: "raw", label: "Raw", unix: rawUnix, episode: rawEpisodeNumber },
+    { key: "sub", label: "Sub", unix: subUnix, episode: subEpisodeNumber },
+    { key: "dub", label: "Dub", unix: dubUnix, episode: dubEpisodeNumber },
+  ].filter((slot): slot is AiringSlot => slot.unix !== null);
 
   useEffect(() => {
     setEntry(initialEntry);
   }, [initialEntry]);
 
   useEffect(() => {
-    if (!preferences.countdown_enabled || !nextSlot) {
-      setCountdown("");
+    if (!preferences.countdown_enabled || airingSlots.length === 0) {
+      setCountdowns({});
       return;
     }
 
-    const updateTicker = () => {
-      const remainingSeconds = Math.floor(nextSlot.unix - Date.now() / 1000);
+    const updateCountdowns = () => {
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const nextCountdowns: Record<string, string> = {};
 
-      if (remainingSeconds <= 0) {
-        setCountdown("Aired / Airing Now");
-        return;
+      for (const slot of airingSlots) {
+        const remainingSeconds = Math.floor(slot.unix - nowUnix);
+        nextCountdowns[slot.key] = formatCountdown(remainingSeconds);
       }
-
-      const { days, hours, minutes, seconds } = getCountdownParts(remainingSeconds);
-      setCountdown(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+      setCountdowns(nextCountdowns);
     };
 
-    updateTicker();
-    const intervalId = window.setInterval(updateTicker, 1000);
+    updateCountdowns();
+    const intervalId = window.setInterval(updateCountdowns, 1000);
     return () => window.clearInterval(intervalId);
-  }, [nextSlot?.unix, preferences.countdown_enabled]);
+  }, [rawUnix, subUnix, dubUnix, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
     setIsUpdating(true);
@@ -240,47 +253,36 @@ const nextSlot =
           </div>
 
           {/* NEXT EPISODE COUNTDOWN CARD */}
-          {visibleSlots.length > 0 && (
+          {airingSlots.length > 0 && (
             <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl">
               <div className="mb-3">
                 <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">
-                  Next Episode Schedule
+                  Episode Airing Schedule
                 </span>
-                <h3 className="text-xl font-black text-white mt-0.5">
-                  Episode {anime.anime_metadata?.next_episode_number ?? anime.anime_metadata?.next_episode_num ?? nextAiringEpisodeNum ?? "?"}
-                </h3>
-                {preferences.countdown_enabled && nextSlot && (
-                  <div className="mb-3 min-h-[1.25rem] text-sm font-mono font-bold text-cyan-400">
-                    {nextSlot.label}: {countdown || "Calculating..."}
-                  </div>
-                )}
               </div>
 
               <div className="grid gap-2">
                 {airingSlots.map((slot) => {
-                  const remainingSeconds = Math.floor(slot.unix - Date.now() / 1000);
-                  const parts = getCountdownParts(remainingSeconds);
-                  const isLive = remainingSeconds <= 0;
-
                   return (
                     <div
                       key={slot.key}
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
                     >
                       <div>
-                        <div className="text-xs font-bold uppercase tracking-widest text-zinc-400">
-                          {slot.label}
+                        <div className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                          <span>{slot.label}</span>
+                          <span className="text-[11px] text-fuchsia-400 normal-case font-medium">
+                            (Episode {slot.episode ?? "?"})
+                          </span>
                         </div>
                         <div className="text-sm text-zinc-300 mt-1">
-                          {formatAiringTime(slot.unix, timezone)} at {formatTimeOnly(slot.unix, timezone)}
+                          {formatDateOnly(slot.unix, timezone)} at {formatTimeOnly(slot.unix, timezone)}
                         </div>
                       </div>
 
                       {preferences.countdown_enabled && (
                         <div className="text-sm font-mono font-bold text-cyan-400">
-                          {isLive
-                            ? "Aired / Airing Now"
-                            : `${parts.days}d ${parts.hours}h ${parts.minutes}m ${parts.seconds}s`}
+                          {countdowns[slot.key] || "Calculating..."}
                         </div>
                       )}
                     </div>
@@ -405,7 +407,7 @@ const nextSlot =
           </div>
         )}
 
-        {/* EPISODES TAB (Now using pre-merged server data array) */}
+        {/* EPISODES TAB */}
         {activeTab === "episodes" && (
           <div className="flex flex-col gap-2">
             {Array.isArray(anime.episodes) && anime.episodes.length > 0 ? anime.episodes.map((ep: any) => (

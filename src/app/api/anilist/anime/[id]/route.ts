@@ -175,12 +175,28 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     // 3. Fetch Historical Episodes from Jikan
     let jikanEpisodes: any[] = [];
     try {
-      const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime/${mal_id}/episodes`);
-      if (jikanResponse.ok) {
-        const jikanJson = await jikanResponse.json();
-        jikanEpisodes = jikanJson.data || [];
-      } else {
-        console.warn(`[API] Jikan returned HTTP ${jikanResponse.status} for episodes`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      try {
+        const jikanResponse = await fetch(
+          `https://api.jikan.moe/v4/anime/${mal_id}/episodes`,
+          {
+            signal: controller.signal,
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (jikanResponse.ok) {
+          const jikanJson = await jikanResponse.json();
+          jikanEpisodes = jikanJson.data || [];
+        } else {
+          console.warn(`[API] Jikan returned HTTP ${jikanResponse.status} for episodes`);
+        }
+      } finally {
+        clearTimeout(timeout);
       }
     } catch (jikanError) {
       console.error("[API] Failed to fetch historical episodes from Jikan:", jikanError);

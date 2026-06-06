@@ -215,6 +215,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
 
     // 4. Fill Missing Episodes & Merge Logic
     const nextEpisodeNumber =
+      meta?.raw_next_episode_number ??
       meta?.next_episode_number ??
       meta?.next_episode_num ??
       anilistData?.nextAiringEpisode?.episode ??
@@ -280,6 +281,9 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
         raw_air_at: meta.raw_air_at,
         sub_air_at: meta.sub_air_at,
         dub_air_at: meta.dub_air_at,
+        raw_next_episode_number: meta.raw_next_episode_number ?? null,
+        sub_next_episode_number: meta.sub_next_episode_number ?? null,
+        dub_next_episode_number: meta.dub_next_episode_number ?? null,
         next_airing_at: meta.next_airing_at,
         next_episode_number: nextEpisodeNumber,
         schedule_updated_at: meta.schedule_updated_at,

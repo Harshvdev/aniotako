@@ -276,98 +276,254 @@ export async function GET(req: NextRequest) {
     const windowEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
 
-    const toUnix = (dateStr: string | null) =>
-      dateStr ? Math.floor(new Date(dateStr).getTime() / 1000) : null;
+    const normalizeEpisodeNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === "") return null;
+      const num = typeof value === "number" ? value : Number(value);
+      return Number.isFinite(num) ? Math.floor(num) : null;
+    };
 
-        // --- Step 4, 5 & 6: Cache refresh for every matched show, queue only in the active window ---
-    for (const show of matchedShows) {
-      const epDate = new Date(show.episodeDate);
-      const anilistId = show.parsedAnilistId;
-      const malId = anilistToMalMap.get(anilistId);
+    const toUnix = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
 
-      // Step 5: Always refresh cache for watched airing anime
-      const { error: upsertError } = await supabase.from("anime_metadata").upsert(
-        {
-          anilist_id: anilistId,
-          mal_id: malId,
-          raw_air_at: toUnix(show.episodeDate),
-          sub_air_at: toUnix(show.subPostDate),
-          dub_air_at: toUnix(show.dubPostDate),
-          next_episode_number: show.episodeNumber,
-          next_airing_at: toUnix(show.episodeDate),
-          schedule_updated_at: now.toISOString(),
-        },
-        { onConflict: "mal_id" }
-      );
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.floor(value) : null;
+  }
 
-      if (upsertError) {
-        console.error("[CRON] upsert failed for MAL", malId, upsertError);
-      } else {
-        cacheUpdatedCount++;
-      }
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber)) return Math.floor(asNumber);
 
-      // Step 6: Only queue notifications when the episode is inside the processing window
-      if (epDate < windowStart || epDate > windowEnd) {
+  const asDate = new Date(String(value));
+  return Number.isNaN(asDate.getTime()) ? null : Math.floor(asDate.getTime() / 1000);
+};
+
+const fetchAnimeDetailHtml = async (route: string): Promise<string | null> => {
+  if (!route) return null;
+
+  try {
+    const res = await fetch(`https://animeschedule.net/anime/${route}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.ANIMESCHEDULE_TOKEN}`,
+      },
+    });
+
+    if (!res.ok) return null;
+    return await res.text();
+  } catch (error) {
+    console.warn(`[CRON] detail page fetch failed for ${route}:`, error);
+    return null;
+  }
+};
+
+const extractField = (html: string, keys: string[]): string | null => {
+  for (const key of keys) {
+    const stringMatch = html.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`, "i"));
+    if (stringMatch?.[1]) return stringMatch[1];
+
+    const numberMatch = html.match(new RegExp(`"${key}"\\s*:\\s*(\\d{10,13})`, "i"));
+    if (numberMatch?.[1]) return numberMatch[1];
+  }
+
+  return null;
+};
+
+const getDetailSchedule = async (show: any) => {
+  const html = await fetchAnimeDetailHtml(show.route);
+  if (!html) {
+    return null;
+  }
+
+  const rawAirAt = toUnix(
+    extractField(html, ["rawPostDate", "raw_air_at", "rawAirAt", "episodeDate"]) ??
+      show.episodeDate ??
+      show.rawPostDate ??
+      show.rawEpisodeDate
+  );
+
+  const subAirAt = toUnix(
+    extractField(html, ["subPostDate", "sub_air_at", "subAirAt"]) ??
+      show.subPostDate ??
+      show.subEpisodeDate ??
+      show.subEpisodeDateTime
+  );
+
+  const dubAirAt = toUnix(
+    extractField(html, ["dubPostDate", "dub_air_at", "dubAirAt"]) ??
+      show.dubPostDate ??
+      show.dubEpisodeDate ??
+      show.dubEpisodeDateTime
+  );
+
+  const rawEpisodeNumber =
+    normalizeEpisodeNumber(
+      extractField(html, [
+        "rawNextEpisodeNumber",
+        "raw_next_episode_number",
+        "rawEpisodeNumber",
+        "raw_episode_number",
+        "episodeNumber",
+        "nextEpisodeNumber",
+        "next_episode_number",
+      ])
+    ) ?? normalizeEpisodeNumber(show.episodeNumber);
+
+  const subEpisodeNumber =
+    normalizeEpisodeNumber(
+      extractField(html, [
+        "subNextEpisodeNumber",
+        "sub_next_episode_number",
+        "subEpisodeNumber",
+        "sub_episode_number",
+      ])
+    ) ?? rawEpisodeNumber;
+
+  const dubEpisodeNumber =
+    normalizeEpisodeNumber(
+      extractField(html, [
+        "dubNextEpisodeNumber",
+        "dub_next_episode_number",
+        "dubEpisodeNumber",
+        "dub_episode_number",
+      ])
+    ) ??
+    (rawEpisodeNumber !== null ? Math.max(rawEpisodeNumber - 1, 1) : null);
+
+  return {
+    rawAirAt,
+    subAirAt,
+    dubAirAt,
+    rawEpisodeNumber,
+    subEpisodeNumber,
+    dubEpisodeNumber,
+  };
+};
+
+const windowStartUnix = Math.floor(windowStart.getTime() / 1000);
+const windowEndUnix = Math.floor(windowEnd.getTime() / 1000);
+
+// --- Step 4, 5 & 6: Cache refresh for every matched show, queue format-specific events independently ---
+for (const show of matchedShows) {
+  const anilistId = show.parsedAnilistId;
+  const malId = anilistToMalMap.get(anilistId);
+
+  const detailSchedule = await getDetailSchedule(show);
+
+  const rawAirAt =
+    detailSchedule?.rawAirAt ??
+    toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawEpisodeDate);
+
+  const subAirAt =
+    detailSchedule?.subAirAt ??
+    toUnix(show.subPostDate ?? show.subEpisodeDate ?? show.subEpisodeDateTime);
+
+  const dubAirAt =
+    detailSchedule?.dubAirAt ??
+    toUnix(show.dubPostDate ?? show.dubEpisodeDate ?? show.dubEpisodeDateTime);
+
+  const rawEpisodeNumber =
+    detailSchedule?.rawEpisodeNumber ??
+    normalizeEpisodeNumber(show.episodeNumber);
+
+  const subEpisodeNumber =
+    detailSchedule?.subEpisodeNumber ??
+    rawEpisodeNumber;
+
+  const dubEpisodeNumber =
+    detailSchedule?.dubEpisodeNumber ??
+    (rawEpisodeNumber !== null ? Math.max(rawEpisodeNumber - 1, 1) : null);
+
+  if (rawEpisodeNumber === null && subEpisodeNumber === null && dubEpisodeNumber === null) {
+    console.warn("[CRON] skipping show with no episode numbers:", show?.title || anilistId);
+    continue;
+  }
+
+  const { error: upsertError } = await supabase.from("anime_metadata").upsert(
+    {
+      anilist_id: anilistId,
+      mal_id: malId,
+      raw_air_at: rawAirAt,
+      sub_air_at: subAirAt,
+      dub_air_at: dubAirAt,
+      raw_next_episode_number: rawEpisodeNumber,
+      sub_next_episode_number: subEpisodeNumber,
+      dub_next_episode_number: dubEpisodeNumber,
+      next_episode_number: rawEpisodeNumber,
+      next_airing_at: rawAirAt ?? subAirAt ?? dubAirAt,
+      schedule_updated_at: now.toISOString(),
+    },
+    { onConflict: "mal_id" }
+  );
+
+  if (upsertError) {
+    console.error("[CRON] upsert failed for MAL", malId, upsertError);
+  } else {
+    cacheUpdatedCount++;
+  }
+
+  const poster_url = show.imageVersionRoute
+    ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}`
+    : null;
+
+  const formatRows = [
+    { format: "raw" as const, timestamp: rawAirAt, episodeNumber: rawEpisodeNumber },
+    { format: "sub" as const, timestamp: subAirAt, episodeNumber: subEpisodeNumber },
+    { format: "dub" as const, timestamp: dubAirAt, episodeNumber: dubEpisodeNumber },
+  ].filter(
+    (
+      row
+    ): row is {
+      format: "raw" | "sub" | "dub";
+      timestamp: number;
+      episodeNumber: number;
+    } => row.timestamp !== null && row.episodeNumber !== null
+  );
+
+  for (const row of formatRows) {
+    if (row.timestamp < windowStartUnix || row.timestamp > windowEndUnix) {
+      continue;
+    }
+
+    inWindowCount++;
+
+    const eventKey = `${malId}:${row.episodeNumber}:${row.format}:${row.timestamp}`;
+
+    const { error: insertEventError } = await supabase
+      .from("notification_events")
+      .insert({
+        event_key: eventKey,
+        anilist_id: anilistId,
+        mal_id: malId,
+        episode_number: row.episodeNumber,
+        format: row.format,
+        aired_at: new Date(row.timestamp * 1000).toISOString(),
+      });
+
+    if (insertEventError) {
+      if (insertEventError.code === "23505") {
         continue;
       }
-
-      inWindowCount++;
-
-      const rawAirAt = toUnix(show.episodeDate);
-      const subAirAt = toUnix(show.subPostDate);
-      const dubAirAt = toUnix(show.dubPostDate);
-
-      const formats = [
-        { format: "raw", timestamp: rawAirAt },
-        { format: "sub", timestamp: subAirAt },
-        { format: "dub", timestamp: dubAirAt },
-      ].filter((f) => f.timestamp && f.timestamp > Math.floor(now.getTime() / 1000));
-
-      const poster_url = show.imageVersionRoute
-        ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}`
-        : null;
-
-      for (const f of formats) {
-        const eventKey = `${malId}:${show.episodeNumber}:${f.format}:${f.timestamp}`;
-
-        const { error: insertEventError } = await supabase
-          .from("notification_events")
-          .insert({
-            event_key: eventKey,
-            anilist_id: anilistId,
-            mal_id: malId,
-            episode_number: show.episodeNumber,
-            format: f.format,
-            aired_at: new Date(f.timestamp! * 1000).toISOString(),
-          });
-
-        if (insertEventError) {
-          if (insertEventError.code === "23505") {
-            continue;
-          }
-          throw insertEventError;
-        }
-
-        await qstash.publishJSON({
-          url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/notify`,
-          body: {
-            anilist_id: anilistId,
-            mal_id: malId,
-            episode: show.episodeNumber,
-            format: f.format,
-            scheduled_at: f.timestamp,
-            title: show.title,
-            poster_url: poster_url,
-          },
-          notBefore: f.timestamp!,
-          retries: 2,
-        });
-
-        if (f.format === "raw") queuedStats.raw++;
-        if (f.format === "sub") queuedStats.sub++;
-        if (f.format === "dub") queuedStats.dub++;
-      }
+      throw insertEventError;
     }
+
+    await qstash.publishJSON({
+      url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/notify`,
+      body: {
+        anilist_id: anilistId,
+        mal_id: malId,
+        episode: row.episodeNumber,
+        format: row.format,
+        scheduled_at: row.timestamp,
+        title: show.title,
+        poster_url: poster_url,
+      },
+      notBefore: row.timestamp,
+      retries: 2,
+    });
+
+    if (row.format === "raw") queuedStats.raw++;
+    if (row.format === "sub") queuedStats.sub++;
+    if (row.format === "dub") queuedStats.dub++;
+  }
+}
 
     // --- Step 7: Final Metric Assertions ---
     return NextResponse.json({

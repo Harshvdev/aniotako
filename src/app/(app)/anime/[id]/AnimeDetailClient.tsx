@@ -20,7 +20,7 @@ interface Props {
 type AiringSlot = {
   key: "raw" | "sub" | "dub";
   label: string;
-  unix: number;
+  unix: number | null;
   episode: number | null;
 };
 
@@ -99,37 +99,34 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
   const subUnix = normalizeUnix(meta?.sub_air_at);
   const dubUnix = normalizeUnix(meta?.dub_air_at);
 
-  // Future-proof episode fields fallback sequence
   const rawEpisodeNumber =
-    normalizeUnix(meta?.raw_episode_number) ??
     normalizeUnix(meta?.raw_next_episode_number) ??
     normalizeUnix(meta?.next_episode_number) ??
     nextAiringEpisodeNum;
 
   const subEpisodeNumber =
-    normalizeUnix(meta?.sub_episode_number) ??
     normalizeUnix(meta?.sub_next_episode_number) ??
     normalizeUnix(meta?.next_episode_number) ??
-    rawEpisodeNumber;
+    null;
 
   const dubEpisodeNumber =
-    normalizeUnix(meta?.dub_episode_number) ??
     normalizeUnix(meta?.dub_next_episode_number) ??
     normalizeUnix(meta?.next_episode_number) ??
-    rawEpisodeNumber;
+    null;
 
   const airingSlots: AiringSlot[] = [
     { key: "raw", label: "Raw", unix: rawUnix, episode: rawEpisodeNumber },
     { key: "sub", label: "Sub", unix: subUnix, episode: subEpisodeNumber },
     { key: "dub", label: "Dub", unix: dubUnix, episode: dubEpisodeNumber },
-  ].filter((slot): slot is AiringSlot => slot.unix !== null);
+  ];
 
   useEffect(() => {
     setEntry(initialEntry);
   }, [initialEntry]);
 
   useEffect(() => {
-    if (!preferences.countdown_enabled || airingSlots.length === 0) {
+    const hasAnyTime = airingSlots.some((slot) => slot.unix !== null);
+    if (!preferences.countdown_enabled || !hasAnyTime) {
       setCountdowns({});
       return;
     }
@@ -139,9 +136,15 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
       const nextCountdowns: Record<string, string> = {};
 
       for (const slot of airingSlots) {
+        if (slot.unix === null) {
+          nextCountdowns[slot.key] = "No schedule yet";
+          continue;
+        }
+
         const remainingSeconds = Math.floor(slot.unix - nowUnix);
         nextCountdowns[slot.key] = formatCountdown(remainingSeconds);
       }
+
       setCountdowns(nextCountdowns);
     };
 
@@ -262,32 +265,33 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
               </div>
 
               <div className="grid gap-2">
-                {airingSlots.map((slot) => {
-                  return (
-                    <div
-                      key={slot.key}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
-                    >
-                      <div>
-                        <div className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                          <span>{slot.label}</span>
-                          <span className="text-[11px] text-fuchsia-400 normal-case font-medium">
-                            (Episode {slot.episode ?? "?"})
-                          </span>
-                        </div>
-                        <div className="text-sm text-zinc-300 mt-1">
-                          {formatDateOnly(slot.unix, timezone)} at {formatTimeOnly(slot.unix, timezone)}
-                        </div>
+                {airingSlots.map((slot) => (
+                  <div
+                    key={slot.key}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
+                  >
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                        <span>{slot.label}</span>
+                        <span className="text-[11px] text-fuchsia-400 normal-case font-medium">
+                          {slot.episode ? `(Episode ${slot.episode})` : "(Episode ?)"}
+                        </span>
                       </div>
 
-                      {preferences.countdown_enabled && (
-                        <div className="text-sm font-mono font-bold text-cyan-400">
-                          {countdowns[slot.key] || "Calculating..."}
-                        </div>
-                      )}
+                      <div className="text-sm text-zinc-300 mt-1">
+                        {slot.unix !== null
+                          ? `${formatDateOnly(slot.unix, timezone)} at ${formatTimeOnly(slot.unix, timezone)}`
+                          : "No schedule yet"}
+                      </div>
                     </div>
-                  );
-                })}
+
+                    {preferences.countdown_enabled && (
+                      <div className="text-sm font-mono font-bold text-cyan-400">
+                        {countdowns[slot.key] || "Calculating..."}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -77,8 +77,63 @@ async function handler(req: Request) {
     }
 
     // Determine the corresponding dynamic property format targets
-    let liveTimestampStr = null;
-    if (liveShowData) {
+    const fetchAnimeDetailHtml = async (route: string): Promise<string | null> => {
+      if (!route) return null;
+
+      try {
+        const res = await fetch(`https://animeschedule.net/anime/${route}`, {
+          headers: {
+            Authorization: `Bearer ${process.env.ANIMESCHEDULE_TOKEN}`,
+          },
+        });
+
+        if (!res.ok) return null;
+        return await res.text();
+      } catch (error) {
+        console.warn(`[NOTIFY] detail page fetch failed for ${route}:`, error);
+        return null;
+      }
+    };
+
+    const extractField = (html: string, keys: string[]): string | null => {
+      for (const key of keys) {
+        const stringMatch = html.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`, "i"));
+        if (stringMatch?.[1]) return stringMatch[1];
+
+        const numberMatch = html.match(new RegExp(`"${key}"\\s*:\\s*(\\d{10,13})`, "i"));
+        if (numberMatch?.[1]) return numberMatch[1];
+      }
+
+      return null;
+    };
+
+    let liveTimestampStr: string | null = null;
+
+    if (liveShowData?.route) {
+      const detailHtml = await fetchAnimeDetailHtml(liveShowData.route);
+
+      if (detailHtml) {
+        if (format === "raw") {
+          liveTimestampStr =
+            extractField(detailHtml, ["rawPostDate", "raw_air_at", "rawAirAt", "episodeDate"]) ??
+            liveShowData.episodeDate;
+        }
+
+        if (format === "sub") {
+          liveTimestampStr =
+            extractField(detailHtml, ["subPostDate", "sub_air_at", "subAirAt"]) ??
+            liveShowData.subPostDate;
+        }
+
+        if (format === "dub") {
+          liveTimestampStr =
+            extractField(detailHtml, ["dubPostDate", "dub_air_at", "dubAirAt"]) ??
+            liveShowData.dubPostDate;
+        }
+      }
+    }
+
+    if (!liveTimestampStr && liveShowData) {
       if (format === "raw") liveTimestampStr = liveShowData.episodeDate;
       if (format === "sub") liveTimestampStr = liveShowData.subPostDate;
       if (format === "dub") liveTimestampStr = liveShowData.dubPostDate;

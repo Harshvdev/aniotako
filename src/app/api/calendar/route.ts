@@ -1,56 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import https from "https";
-
-// Fallback fetcher for Jikan (IPv4 to prevent rate limits/drops)
-const fetchIPv4 = (url: string, timeoutMs: number = 6000): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { family: 4 }, (res) => {
-      if (res.statusCode === 429) return reject({ status: 429, message: "Rate Limited" });
-      if (res.statusCode && res.statusCode !== 200) return reject({ status: res.statusCode, message: `HTTP Error ${res.statusCode}` });
-      let rawData = '';
-      res.on('data', (chunk) => { rawData += chunk; });
-      res.on('end', () => {
-        try { resolve(JSON.parse(rawData)); } 
-        catch (e) { reject({ status: 500, message: "JSON Parse Error" }); }
-      });
-    });
-    req.on('error', (err) => reject(err));
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject({ name: 'AbortError', message: 'Timeout' }); });
-  });
-};
-
-const fetchAnilist = async (query: string, variables: any) => {
-  const res = await fetch("https://graphql.anilist.co", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!res.ok) throw new Error(`AniList Network Error: ${res.status}`);
-  return res.json();
-};
-
-const anilistQuery = `
-  query($page: Int, $start: Int, $end: Int, $anilistIds: [Int]) {
-    Page(page: $page, perPage: 50) {
-      pageInfo {
-        hasNextPage
-      }
-      airingSchedules(airingAt_greater: $start, airingAt_lesser: $end, mediaId_in: $anilistIds, sort: TIME) {
-        airingAt
-        episode
-        media {
-          id
-          idMal
-          format
-          episodes
-          title { romaji english }
-          coverImage { large }
-        }
-      }
-    }
-  }
-`;
 
 export async function GET(req: Request) {
   try {
@@ -65,7 +14,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing date parameter" }, { status: 400 });
     }
 
-    const targetDate = new Date(`${dateParam}T00:00:00Z`); // Parse strictly as UTC
+    // Parse strictly as UTC
+    const targetDate = new Date(`${dateParam}T00:00:00Z`); 
     let startUnix: number, endUnix: number;
     let mondayUtc = new Date(targetDate);
 
@@ -84,7 +34,7 @@ export async function GET(req: Request) {
       startUnix = Math.floor(mondayUtc.getTime() / 1000);
       endUnix = Math.floor(sundayUtc.getTime() / 1000);
     } else {
-      // Get start and end of the specific day in UTC
+      // Get exact start and end of the specific day in UTC boundaries
       const startOfDay = new Date(targetDate);
       startOfDay.setUTCHours(0, 0, 0, 0);
       
@@ -95,12 +45,12 @@ export async function GET(req: Request) {
       endUnix = Math.floor(endOfDay.getTime() / 1000);
     }
 
-    console.log(`Calculated Unix Range: start=${startUnix}, end=${endUnix}`);
-
+    // Authenticate User via Supabase
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // Fetch watchlist entries linked with anime metadata
     const { data: watchlist, error: watchError } = await supabase
       .from("watchlist_entries")
       .select(`mal_id, status, watched_episodes, anime_metadata!left (anilist_id)`)
@@ -112,139 +62,81 @@ export async function GET(req: Request) {
     }
 
     if (!watchlist || watchlist.length === 0) {
-      return NextResponse.json(isWeek ? { dotsByDate: {} } : { data: [] });
+      return NextResponse.json({ chunks: [], userEntriesMap: {} });
     }
 
-    // Strip out completed/dropped shows
+    // Filter out completed or dropped shows
     const activeWatchlist = watchlist.filter(
       (entry: any) => entry.status !== "completed" && entry.status !== "dropped"
     );
 
-    const userEntries = activeWatchlist.map((entry: any) => {
+    // Build a map of entries using AniList ID as the key for easy frontend cross-referencing
+    const userEntriesMap: Record<number, any> = {};
+    const anilistIds: number[] = [];
+
+    activeWatchlist.forEach((entry: any) => {
       let anilist_id = null;
       if (entry.anime_metadata) {
         anilist_id = Array.isArray(entry.anime_metadata) 
           ? entry.anime_metadata[0]?.anilist_id 
           : entry.anime_metadata.anilist_id;
       }
-      return { ...entry, anilist_id: Number(anilist_id) };
+      
+      const parsedId = Number(anilist_id);
+      if (!isNaN(parsedId) && parsedId > 0) {
+        anilistIds.push(parsedId);
+        userEntriesMap[parsedId] = {
+          status: entry.status,
+          watched_episodes: entry.watched_episodes,
+          mal_id: entry.mal_id
+        };
+      }
     });
 
-    const anilistIds = userEntries.map(e => e.anilist_id).filter(id => !isNaN(id) && id > 0);
-    const missingAnilistEntries = userEntries.filter(e => isNaN(e.anilist_id) || e.anilist_id <= 0);
-
-    let allSchedules: any[] = [];
-    
-    // FETCH ANILIST (One query, loop pages if results exceed 50)
-    if (anilistIds.length > 0) {
-      let page = 1;
-      let hasNextPage = true;
-
-      while (hasNextPage) {
-        try {
-          const variables = { page, start: startUnix - 1, end: endUnix + 1, anilistIds };
-          const anilistRes = await fetchAnilist(anilistQuery, variables);
-
-          if (anilistRes.errors) {
-            console.error(`[CALENDAR API] AniList GraphQL Errors:`, JSON.stringify(anilistRes.errors));
-            break;
-          }
-
-          if (anilistRes?.data?.Page?.airingSchedules) {
-            allSchedules.push(...anilistRes.data.Page.airingSchedules);
-          }
-          
-          hasNextPage = anilistRes?.data?.Page?.pageInfo?.hasNextPage || false;
-          page++;
-        } catch (err: any) {
-          console.error(`[CALENDAR API] AniList Error:`, err.message);
-          break;
-        }
-      }
+    if (anilistIds.length === 0) {
+      return NextResponse.json({ chunks: [], userEntriesMap: {} });
     }
 
-    // --- RETURN DOTS (WEEK MODE) ---
-    if (isWeek) {
-      const dotsByDate: Record<string, boolean> = {};
-      
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(mondayUtc);
-        d.setUTCDate(mondayUtc.getUTCDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
-        dotsByDate[dateStr] = false;
-      }
-      
-      allSchedules.forEach((schedule: any) => {
-        const dateObj = new Date(schedule.airingAt * 1000);
-        const dStr = dateObj.toISOString().split('T')[0];
-        if (dotsByDate[dStr] !== undefined) {
-          dotsByDate[dStr] = true;
+    // Chunk the AniList IDs into groups of 50 to naturally handle pagination limits safely
+    const CHUNK_SIZE = 50;
+    const chunks: any[] = [];
+    
+    for (let i = 0; i < anilistIds.length; i += CHUNK_SIZE) {
+      const chunkIds = anilistIds.slice(i, i + CHUNK_SIZE);
+      chunks.push({
+        query: `
+          query($start: Int, $end: Int, $ids: [Int]) {
+            Page(page: 1, perPage: 50) {
+              airingSchedules(airingAt_greater: $start, airingAt_lesser: $end, mediaId_in: $ids, sort: TIME) {
+                airingAt
+                episode
+                media {
+                  id
+                  idMal
+                  format
+                  episodes
+                  title { romaji english }
+                  coverImage { large }
+                }
+              }
+            }
+          }
+        `,
+        variables: {
+          start: startUnix,
+          end: endUnix,
+          ids: chunkIds
         }
       });
-      
-      console.log(`[CALENDAR API] Week Dots Payload Prepared.`);
-      return NextResponse.json({ dotsByDate });
-    } 
-    
-    // --- RETURN SPECIFIC DAY (SINGLE MODE) ---
-    let matchedAnime = allSchedules.map((schedule: any) => {
-      const media = schedule.media;
-      const userEntry = userEntries.find(e => e.anilist_id === media.id || e.mal_id === media.idMal);
-      return {
-        mal_id: media.idMal,
-        anilist_id: media.id,
-        title: media.title.romaji || media.title.english,
-        title_english: media.title.english || null,
-        title_romaji: media.title.romaji || null,
-        poster_url: media.coverImage?.large,
-        format: media.format,
-        airingAt: schedule.airingAt,
-        episode: schedule.episode,
-        total_episodes: media.episodes,
-        status: userEntry?.status,
-        watched_episodes: userEntry?.watched_episodes,
-      };
-    });
-
-    // Jikan Fallback for Missing AniList IDs
-    if (missingAnilistEntries.length > 0) {
-      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const dayOfWeek = days[targetDate.getUTCDay()]; 
-      
-      try {
-        const jikanData = await fetchIPv4(`https://api.jikan.moe/v4/schedules?filter=${dayOfWeek}`);
-        const missingMalIds = new Set(missingAnilistEntries.map(e => e.mal_id));
-        
-        const jikanMatches = (jikanData.data || [])
-          .filter((anime: any) => missingMalIds.has(anime.mal_id))
-          .map((anime: any) => {
-            const userEntry = missingAnilistEntries.find(e => e.mal_id === anime.mal_id);
-            return {
-              mal_id: anime.mal_id,
-              anilist_id: null,
-              title: anime.title,
-              title_english: anime.title_english || null,
-              title_romaji: anime.title || null,
-              poster_url: anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url,
-              format: anime.type,
-              time: anime.broadcast?.string || "Time Unknown",
-              airingAt: null,
-              episode: null,
-              total_episodes: anime.episodes,
-              status: userEntry?.status,
-              watched_episodes: userEntry?.watched_episodes,
-            };
-          });
-          
-        matchedAnime = [...matchedAnime, ...jikanMatches];
-      } catch (e: any) {
-        console.error("[CALENDAR API] Jikan fallback failed:", e.message);
-      }
     }
 
-    console.log(`[CALENDAR API] Returning ${matchedAnime.length} entries for ${dateParam}.`);
-    console.log(`--- [CALENDAR API] Request Ended ---\n`);
-    return NextResponse.json({ data: matchedAnime });
+    console.log(`[CALENDAR API] Prepared ${chunks.length} payload requests for client-side execution.`);
+    return NextResponse.json({ 
+      isWeek,
+      mondayUtcStr: mondayUtc.toISOString(),
+      chunks, 
+      userEntriesMap 
+    });
     
   } catch (error: any) {
     console.error("[CALENDAR API] Unhandled Error:", error);

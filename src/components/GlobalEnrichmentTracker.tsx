@@ -3,16 +3,120 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const fetchAniListBatch = async (malIds: number[]) => {
+  const query = `
+    query($malIds: [Int]) {
+      Page(page: 1, perPage: 50) {
+        media(idMal_in: $malIds, type: ANIME) {
+          id
+          idMal
+          title { romaji english native }
+          coverImage { large extraLarge }
+          episodes
+          format
+          status
+          genres
+          season
+          seasonYear
+          description
+          studios { nodes { name isAnimationStudio } }
+          averageScore
+          startDate { year }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query, variables: { malIds } })
+  });
+
+  if (!response.ok) {
+    throw new Error(`AniList HTTP Error ${response.status}`);
+  }
+
+  const json = await response.json();
+  return json.data?.Page?.media || [];
+};
+
+const mapAniListMedia = (media: any) => {
+  const cleanSynopsis = media.description ? media.description.replace(/<[^>]*>?/gm, '') : null;
+  const mainStudio = media.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name
+                  || media.studios?.nodes?.[0]?.name || null;
+  
+  return {
+    anilist_id: media.id,
+    title: media.title.romaji || media.title.english || "",
+    title_english: media.title.english || null,
+    title_romaji: media.title.romaji || null,
+    title_native: media.title.native || null,
+    genres: media.genres || [],
+    type: media.format || "Unknown",
+    season: media.season || null,
+    airing_status: media.status || null,
+    studio: mainStudio,
+    year: media.seasonYear || media.startDate?.year || null,
+    total_episodes: media.episodes || null,
+    synopsis: cleanSynopsis,
+    poster_url: media.coverImage?.extraLarge || media.coverImage?.large || null,
+    anilist_raw: media,
+    jikan_raw: null
+  };
+};
+
+const mapJikanMedia = (jData: any) => {
+  const combinedGenres = Array.from(new Set([
+    ...(jData.genres || []), ...(jData.explicit_genres || []),
+    ...(jData.themes || []), ...(jData.demographics || [])
+  ].map((g: any) => g.name)));
+  
+  return {
+    anilist_id: null,
+    title: jData.title || "",
+    title_english: jData.title_english || null,
+    title_romaji: jData.title || null,
+    genres: combinedGenres,
+    type: jData.type || "Unknown",
+    season: jData.season || null,
+    airing_status: jData.status || null,
+    studio: jData.studios?.[0]?.name || null,
+    year: jData.year || null,
+    total_episodes: jData.episodes || null,
+    synopsis: jData.synopsis || null,
+    poster_url: jData.images?.jpg?.large_image_url || null,
+    anilist_raw: null,
+    jikan_raw: jData
+  };
+};
+
 export default function GlobalEnrichmentTracker() {
   const [isActive, setIsActive] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [stats, setStats] = useState({ done: 0, total: 0, remaining: 0 });
+  const [stats, setStats] = useState({ done: 0, total: 0 });
+  const [syncStage, setSyncStage] = useState<"anilist" | "jikan">("anilist");
+  const [jikanQueueLength, setJikanQueueLength] = useState(0);
+  const [jikanDone, setJikanDone] = useState(0);
   
   const isProcessingRef = useRef(false);
   const router = useRouter();
 
+  // Guard against tab closure
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isActive) {
+        e.preventDefault();
+        e.returnValue = "Enrichment is in progress. Leaving now will pause the sync.";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isActive]);
+
   const checkStatusAndStart = async () => {
-    // 1. LOCK IMMEDIATELY. Do not wait for fetch.
     if (isProcessingRef.current) return;
     isProcessingRef.current = true; 
 
@@ -23,18 +127,12 @@ export default function GlobalEnrichmentTracker() {
         return;
       }
       
-      const { remaining } = await res.json();
+      const { remaining, pendingEntries } = await res.json();
       
-      if (remaining > 0) {
-        setStats(prev => ({ 
-          ...prev, 
-          remaining, 
-          total: prev.total > remaining ? prev.total : remaining 
-        }));
-        // startProcessing takes over the lock from here
-        startProcessing(remaining);
+      if (remaining > 0 && pendingEntries && pendingEntries.length > 0) {
+        setStats({ done: 0, total: remaining });
+        startProcessing(pendingEntries);
       } else {
-        // Unlock if there is nothing to do
         isProcessingRef.current = false; 
       }
     } catch (err) {
@@ -43,52 +141,163 @@ export default function GlobalEnrichmentTracker() {
     }
   };
 
-  const startProcessing = async (initialRemaining: number) => {
+  const startProcessing = async (pendingEntries: any[]) => {
     setIsActive(true);
     setIsComplete(false);
+    setSyncStage("anilist");
 
-    let currentRemaining = initialRemaining;
+    const jikanFallbackQueue: any[] = [];
+    let doneCount = 0;
 
-    while (currentRemaining > 0) {
+    // --- STAGE 1: ANILIST BATCHING (Fast) ---
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < pendingEntries.length; i += CHUNK_SIZE) {
+      const chunk = pendingEntries.slice(i, i + CHUNK_SIZE);
+      const chunkIds = chunk.map(e => e.mal_id);
+
+      let mediaList: any[] = [];
+      let aniListFailed = false;
+
       try {
-        const res = await fetch("/api/enrich", { method: "POST" });
-        if (!res.ok) break; 
-        
-        // 2. SHIELD AGAINST HTML ERRORS (Fixes the <!DOCTYPE crash)
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          console.error("Server returned non-JSON response. Pausing tracker.");
-          break;
-        }
-
-        const data = await res.json();
-        currentRemaining = data.remaining;
-        
-        setStats(prev => ({
-          ...prev,
-          remaining: data.remaining,
-          done: prev.total - data.remaining
-        }));
-
-        if (data.remaining <= 0) {
-          isProcessingRef.current = false;
-          setIsActive(false);
-          setIsComplete(true);
-          
-          router.refresh();
-          
-          setTimeout(() => {
-            setIsComplete(false);
-            setStats({ done: 0, total: 0, remaining: 0 });
-          }, 4000);
-          break;
-        }
+        mediaList = await fetchAniListBatch(chunkIds);
       } catch (err) {
-        console.error("Enrichment loop interrupted", err);
-        break;
+        console.warn("[Enrich] AniList batch fetch failed. Will fallback all chunk items to Jikan.", err);
+        aniListFailed = true;
+      }
+
+      const mediaMap = new Map<number, any>();
+      mediaList.forEach((media: any) => {
+        if (media.idMal) mediaMap.set(media.idMal, media);
+      });
+
+      const enrichmentsToSave: any[] = [];
+
+      for (const entry of chunk) {
+        const media = mediaMap.get(entry.mal_id);
+        if (media && !aniListFailed) {
+          const mappedMetadata = mapAniListMedia(media);
+          enrichmentsToSave.push({
+            mal_id: entry.mal_id,
+            watchlist_id: entry.id,
+            status: entry.status,
+            watched_episodes: entry.watched_episodes,
+            poster_url: mappedMetadata.poster_url,
+            total_episodes: mappedMetadata.total_episodes,
+            title_english: mappedMetadata.title_english,
+            title_romaji: mappedMetadata.title_romaji,
+            metadata: mappedMetadata
+          });
+        } else {
+          // Add to Jikan queue if not found on AniList or if AniList failed
+          jikanFallbackQueue.push(entry);
+        }
+      }
+
+      // Save AniList resolved chunk to database immediately
+      if (enrichmentsToSave.length > 0) {
+        try {
+          const saveRes = await fetch("/api/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enrichments: enrichmentsToSave })
+          });
+          if (!saveRes.ok) {
+            console.error("[Enrich] Failed to save AniList batch to DB");
+          } else {
+            doneCount += enrichmentsToSave.length;
+            setStats(prev => ({ ...prev, done: doneCount }));
+          }
+        } catch (saveErr) {
+          console.error("[Enrich] Error saving AniList batch", saveErr);
+        }
       }
     }
-    isProcessingRef.current = false; // Always release the lock when done
+
+    // --- STAGE 2: JIKAN FALLBACK (Slow / Sequential) ---
+    if (jikanFallbackQueue.length > 0) {
+      setSyncStage("jikan");
+      setJikanQueueLength(jikanFallbackQueue.length);
+      setJikanDone(0);
+
+      for (let j = 0; j < jikanFallbackQueue.length; j++) {
+        const entry = jikanFallbackQueue[j];
+        
+        // Respect Jikan 3 req/sec limit with 1.2s delay
+        await delay(1200);
+
+        let mappedMetadata: any = null;
+        let jikanFailedOr404 = false;
+
+        try {
+          const res = await fetch(`https://api.jikan.moe/v4/anime/${entry.mal_id}`);
+          if (res.status === 404) {
+            jikanFailedOr404 = true;
+          } else if (!res.ok) {
+            throw new Error(`Jikan returned HTTP ${res.status}`);
+          } else {
+            const json = await res.json();
+            const jData = json.data;
+            if (jData) {
+              mappedMetadata = mapJikanMedia(jData);
+            } else {
+              jikanFailedOr404 = true;
+            }
+          }
+        } catch (err) {
+          console.warn(`[Enrich] Jikan fetch failed for MAL ID ${entry.mal_id}`, err);
+          jikanFailedOr404 = true;
+        }
+
+        // Handle Ghost Item or missing item: cache as "Unknown" to avoid retrying
+        if (jikanFailedOr404 || !mappedMetadata) {
+          mappedMetadata = {
+            title: entry.title,
+            type: "Unknown"
+          };
+        }
+
+        const enrichmentPayload = {
+          mal_id: entry.mal_id,
+          watchlist_id: entry.id,
+          status: entry.status,
+          watched_episodes: entry.watched_episodes,
+          poster_url: mappedMetadata.poster_url || null,
+          total_episodes: mappedMetadata.total_episodes || null,
+          title_english: mappedMetadata.title_english || null,
+          title_romaji: mappedMetadata.title_romaji || null,
+          metadata: mappedMetadata
+        };
+
+        try {
+          const saveRes = await fetch("/api/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enrichments: [enrichmentPayload] })
+          });
+          if (saveRes.ok) {
+            doneCount++;
+            setJikanDone(j + 1);
+            setStats(prev => ({ ...prev, done: doneCount }));
+          }
+        } catch (saveErr) {
+          console.error(`[Enrich] Failed to save Jikan fallback for MAL ID ${entry.mal_id}`, saveErr);
+        }
+      }
+    }
+
+    // --- COMPLETE ---
+    setIsActive(false);
+    setIsComplete(true);
+    isProcessingRef.current = false;
+    
+    router.refresh();
+
+    setTimeout(() => {
+      setIsComplete(false);
+      setStats({ done: 0, total: 0 });
+      setJikanQueueLength(0);
+      setJikanDone(0);
+    }, 4000);
   };
 
   useEffect(() => {
@@ -109,7 +318,11 @@ export default function GlobalEnrichmentTracker() {
           <>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-4 h-4 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin shrink-0"></div>
-              <p className="text-xs font-bold text-white tracking-wide truncate">Syncing missing artwork...</p>
+              <p className="text-xs font-bold text-white tracking-wide truncate">
+                {syncStage === "anilist" 
+                  ? "Syncing artwork & metadata..." 
+                  : `Searching MyAnimeList (${jikanDone}/${jikanQueueLength})...`}
+              </p>
             </div>
             
             <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden mb-2">
@@ -129,7 +342,7 @@ export default function GlobalEnrichmentTracker() {
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             <p className="text-xs font-bold tracking-wide">Artwork sync complete!</p>
           </div>
-        ): null}
+        ) : null}
       </div>
     </div>
   );

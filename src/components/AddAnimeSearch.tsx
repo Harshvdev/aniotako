@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import { createClient } from "@/lib/supabase/client";
 
 interface AnilistAnime {
   mal_id: number | null;
@@ -34,13 +35,170 @@ const ADVANCED_TAGS = [
   "4-koma", "Achronological Order", "Afterlife", "Age Gap", "Airsoft", "Aliens", "Alternate Universe", "American Football", "Amnesia", "Anti-Hero", "Archery", "Assassins", "Athletics", "Augmented Reality", "Aviation", "Badminton", "Band", "Bar", "Baseball", "Basketball", "Battle Royale", "Biographical", "Bisexual", "Body Swapping", "Boxing", "Bullying", "Calligraphy", "Card Battle", "CGI", "Chibi", "Chuunibyou", "Classic Literature", "College", "Coming of Age", "Cosplay", "Crossdressing", "Crossover", "Cultivation", "Cute Girls Doing Cute Things", "Cyberpunk", "Cycling", "Dancing", "Delinquents", "Development", "Dragons", "Drawing", "Dystopian", "Economics", "Educational", "Ensemble Cast", "Environmental", "Episodic", "Espionage", "Fairy Tale", "Family Life", "Fashion", "Female Protagonist", "Fishing", "Fitness", "Flash", "Food", "Football", "Foreign", "Fugitive", "Full CGI", "Full Colour", "Gambling", "Gangs", "Gender Bending", "Gender Neutral", "Ghost", "Gods", "Gore", "Guns", "Gyaru", "Henshin", "Hikikomori", "Ice Skating", "Idol", "Iyashikei", "Kaiju", "Karuta", "Kemonomimi", "Love Triangle", "Mafia", "Mahjong", "Maids", "Male Protagonist", "Memory Manipulation", "Meta", "Monster Girl", "Mopeds", "Motorcycles", "Musical", "Mythology", "Nekomimi", "Ninja", "No Dialogue", "Noir", "Nudity", "Otaku Culture", "Outdoor", "Philosophy", "Photography", "Pirates", "Poker", "Politics", "Post-Apocalyptic", "Primarily Adult Cast", "Primarily Female Cast", "Primarily Male Cast", "Puppetry", "Real Robot", "Rehabilitation", "Reincarnation", "Revenge", "Reverse Harem", "Robots", "Rugby", "Rural", "Satire", "School Club", "Ships", "Shogi", "Slapstick", "Slavery", "Space Opera", "Steampunk", "Stop Motion", "Super Robot", "Superhero", "Surreal Comedy", "Survival", "Swimming", "Swordplay", "Table Tennis", "Tanks", "Teacher", "Tennis", "Terrorism", "Time Manipulation", "Time Skip", "Tragedy", "Trains", "Triads", "Tsundere", "Urban Fantasy", "Video Games", "Virtual World", "Volleyball", "War", "Witch", "Work", "Wrestling", "Writing", "Wuxia", "Yakuza", "Yandere", "Youkai", "Zombie"
 ];
 
+const ANILIST_GENRES = new Set([
+  "Action", "Adventure", "Boys Love", "Comedy", "Drama", "Ecchi", "Fantasy", 
+  "Girls Love", "Hentai", "Horror", "Mahou Shoujo", "Mecha", "Music", "Mystery", 
+  "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"
+]);
+
+const TAG_MAP: Record<string, string> = {
+  "Gourmet": "Food",
+  "Shoujo Ai": "Girls Love",
+  "Shounen Ai": "Boys Love",
+  "Game": "Video Games",
+  "Dementia": "Surreal Comedy",
+  "Harem": "Female Harem",
+  "Reverse Harem": "Male Harem"
+};
+
+const ANILIST_SEARCH_QUERY = `
+  query ($page: Int, $perPage: Int, $search: String, $type: MediaType, $format: MediaFormat, $status: MediaStatus, $genre_in: [String], $tag_in: [String], $sort: [MediaSort], $isAdult: Boolean, $averageScore_greater: Int, $averageScore_lesser: Int) {
+    Page(page: $page, perPage: $perPage) {
+      pageInfo {
+        currentPage
+        hasNextPage
+      }
+      media(search: $search, type: $type, format: $format, status: $status, genre_in: $genre_in, tag_in: $tag_in, sort: $sort, isAdult: $isAdult, averageScore_greater: $averageScore_greater, averageScore_lesser: $averageScore_lesser) {
+        id
+        idMal
+        title { romaji english native }
+        coverImage { large medium }
+        bannerImage
+        episodes
+        status
+        format
+        genres
+        tags { name }
+        averageScore
+        popularity
+        season
+        seasonYear
+        description
+        studios(isMain: true) { nodes { name } }
+        startDate { year month day }
+        nextAiringEpisode { airingAt episode }
+      }
+    }
+  }
+`;
+
+const fetchAniListSearch = async (
+  queryText: string,
+  filters: any,
+  pageNumber: number,
+  isAdult: boolean,
+  signal?: AbortSignal
+) => {
+  const variables: any = {
+    page: pageNumber,
+    perPage: 20,
+    type: "ANIME",
+  };
+
+  if (!isAdult) variables.isAdult = false;
+
+  if (queryText.trim() !== "") variables.search = queryText;
+  if (filters.type !== "All") variables.format = filters.type;
+  if (filters.status !== "All") variables.status = filters.status;
+
+  if (filters.genres.length > 0) {
+    const anilistGenres: string[] = [];
+    const anilistTags: string[] = [];
+    
+    filters.genres.forEach((g: string) => {
+      const mapped = TAG_MAP[g] || g;
+      if (ANILIST_GENRES.has(mapped)) {
+        anilistGenres.push(mapped);
+      } else {
+        anilistTags.push(mapped);
+      }
+    });
+
+    if (anilistGenres.length > 0) variables.genre_in = anilistGenres;
+    if (anilistTags.length > 0) variables.tag_in = anilistTags;
+  }
+
+  if (filters.order_by !== "All") {
+    const sortMap: Record<string, string> = {
+      "Score": "SCORE_DESC",
+      "Title": "TITLE_ROMAJI",
+      "Episodes": "EPISODES_DESC",
+      "Popularity": "POPULARITY_DESC",
+      "Trending": "TRENDING_DESC"
+    };
+    variables.sort = [sortMap[filters.order_by] || "POPULARITY_DESC"];
+  } else if (queryText.trim() !== "") {
+    variables.sort = ["SEARCH_MATCH"];
+  } else {
+    variables.sort = ["POPULARITY_DESC"];
+  }
+
+  if (filters.score !== "All") {
+    const [min, max] = filters.score.split("-");
+    variables.averageScore_greater = parseInt(min, 10) * 10;
+    variables.averageScore_lesser = parseInt(max, 10) * 10 + 9;
+  }
+
+  const response = await fetch("https://graphql.anilist.co", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ query: ANILIST_SEARCH_QUERY, variables }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`AniList returned status ${response.status}`);
+  }
+
+  const json = await response.json();
+  const pageData = json.data.Page;
+
+  const mappedData = pageData.media.map((m: any) => {
+    const mergedGenres = [
+      ...(m.genres || []),
+      ...(m.tags?.map((t: any) => t.name) || [])
+    ];
+
+    return {
+      mal_id: m.idMal,
+      anilist_id: m.id,
+      title: m.title.romaji || m.title.english || m.title.native,
+      title_english: m.title.english,
+      title_romaji: m.title.romaji,
+      poster_url: m.coverImage?.large || m.coverImage?.medium,
+      type: m.format,
+      status: m.status,
+      episodes: m.episodes,
+      score: m.averageScore ? m.averageScore / 10 : null,
+      genres: Array.from(new Set(mergedGenres)),
+      year: m.seasonYear,
+      season: m.season,
+      studio: m.studios?.nodes?.[0]?.name || null,
+      next_episode: m.nextAiringEpisode
+    };
+  });
+
+  return {
+    data: mappedData,
+    pagination: {
+      current_page: pageData.pageInfo.currentPage,
+      has_next_page: pageData.pageInfo.hasNextPage
+    }
+  };
+};
+
 export default function AddAnimeSearch() {
   const router = useRouter();
   const { getTitle } = useTitleLanguage();
+  const supabase = createClient();
   
   const [query, setQuery] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [showAdvancedTags, setShowAdvancedTags] = useState(false);
+  const [isAdult, setIsAdult] = useState(false);
   
   const [filters, setFilters] = useState({
     type: "All", status: "All", score: "All", order_by: "All", genres: [] as string[]
@@ -57,8 +215,29 @@ export default function AddAnimeSearch() {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // Load user's NSFW preference on mount
   useEffect(() => {
-    // BUG FIX: Added filters.score === "All" to prevent it from clearing when we just changed the score!
+    async function loadPrefs() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: prefs } = await supabase
+            .from("user_preferences")
+            .select("show_adult")
+            .eq("user_id", user.id)
+            .single();
+          if (prefs?.show_adult) {
+            setIsAdult(true);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user preferences", err);
+      }
+    }
+    loadPrefs();
+  }, [supabase]);
+
+  useEffect(() => {
     if (!query.trim() && filters.genres.length === 0 && filters.order_by === "All" && filters.type === "All" && filters.status === "All" && filters.score === "All") {
       setResults([]);
       setShowDropdown(false);
@@ -73,47 +252,20 @@ export default function AddAnimeSearch() {
       setPage(1); 
       
       try {
-        const params = new URLSearchParams();
-        params.append("page", "1");
-        if (query.trim()) params.append("q", query);
-        if (filters.type !== "All") params.append("type", filters.type);
-        if (filters.status !== "All") params.append("status", filters.status);
-        if (filters.genres.length > 0) params.append("genres", filters.genres.join(","));
-        
-        if (filters.order_by !== "All") {
-          const sortMap: Record<string, string> = {
-            "Score": "SCORE_DESC",
-            "Title": "TITLE_ROMAJI",
-            "Episodes": "EPISODES_DESC",
-            "Popularity": "POPULARITY_DESC",
-            "Trending": "TRENDING_DESC"
-          };
-          params.append("sort", sortMap[filters.order_by] || "POPULARITY_DESC");
-        }
-        
-        if (filters.score !== "All") {
-          const [min, max] = filters.score.split("-");
-          params.append("min_score", min);
-          params.append("max_score", max);
-        }
-
-        const res = await fetch(`/api/anilist/search?${params.toString()}`, { signal: controller.signal });
-        
-        if (res.ok) {
-          const json = await res.json();
-          setResults(json.data);
-          setHasNextPage(json.pagination.has_next_page);
-          setShowDropdown(true);
-        } else if (res.status === 429) {
-           setToast({ message: "Searching too fast! Please wait a moment.", type: "error" });
-        } else {
-           // Add this block to catch 500s and other API failures
-           setToast({ message: "Network timeout. AniList is currently unreachable.", type: "error" });
-           setResults([]);
-        }
-
+        const result = await fetchAniListSearch(query, filters, 1, isAdult, controller.signal);
+        setResults(result.data);
+        setHasNextPage(result.pagination.has_next_page);
+        setShowDropdown(true);
       } catch (err: any) {
-        if (err.name !== "AbortError") console.error("Search failed", err);
+        if (err.name !== "AbortError") {
+          console.error("Search failed", err);
+          if (err.message?.includes("429")) {
+            setToast({ message: "Searching too fast! Please wait a moment.", type: "error" });
+          } else {
+            setToast({ message: "Network timeout. AniList is currently unreachable.", type: "error" });
+          }
+          setResults([]);
+        }
       } finally {
         setIsSearching(false);
       }
@@ -123,7 +275,7 @@ export default function AddAnimeSearch() {
       clearTimeout(delayDebounceFn);
       controller.abort(); 
     };
-  }, [query, filters]);
+  }, [query, filters, isAdult]);
 
   const handleLoadMore = async () => {
     if (isLoadingMore || !hasNextPage) return;
@@ -131,42 +283,13 @@ export default function AddAnimeSearch() {
     const nextPage = page + 1;
 
     try {
-      const params = new URLSearchParams();
-      params.append("page", nextPage.toString());
-      if (query.trim()) params.append("q", query);
-      if (filters.type !== "All") params.append("type", filters.type);
-      if (filters.status !== "All") params.append("status", filters.status);
-      if (filters.genres.length > 0) params.append("genres", filters.genres.join(","));
-      
-      if (filters.order_by !== "All") {
-        const sortMap: Record<string, string> = {
-          "Score": "SCORE_DESC",
-          "Title": "TITLE_ROMAJI",
-          "Episodes": "EPISODES_DESC",
-          "Popularity": "POPULARITY_DESC",
-          "Trending": "TRENDING_DESC"
-        };
-        params.append("sort", sortMap[filters.order_by] || "POPULARITY_DESC");
-      }
-      
-      if (filters.score !== "All") {
-        const [min, max] = filters.score.split("-");
-        params.append("min_score", min);
-        params.append("max_score", max);
-      }
-
-      const res = await fetch(`/api/anilist/search?${params.toString()}`);
-      
-      if (res.ok) {
-        const json = await res.json();
-        setResults((prev) => [...prev, ...json.data]);
-        setHasNextPage(json.pagination.has_next_page);
-        setPage(nextPage);
-      } else {
-        setToast({ message: "Failed to load more results. Try again.", type: "error" });
-      }
+      const result = await fetchAniListSearch(query, filters, nextPage, isAdult);
+      setResults((prev) => [...prev, ...result.data]);
+      setHasNextPage(result.pagination.has_next_page);
+      setPage(nextPage);
     } catch (err: any) {
       console.error("Failed to load more pages", err);
+      setToast({ message: "Failed to load more results. Try again.", type: "error" });
     } finally {
       setIsLoadingMore(false);
     }

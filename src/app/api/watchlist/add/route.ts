@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     }
 
     // 4. Insert into watchlist
-    const { error: insertError } = await supabase
+    const { data: newEntry, error: insertError } = await supabase
       .from("watchlist_entries")
       .insert({
         user_id: user.id,
@@ -51,11 +51,13 @@ export async function POST(req: Request) {
         watched_episodes: watched_episodes || 0,
         total_episodes: total_episodes || null,
         poster_url: poster_url || null,
-      });
+      })
+      .select()
+      .single();
 
     if (insertError) throw insertError;
 
-    return NextResponse.json({ success: true, message: "Anime added successfully!" });
+    return NextResponse.json({ success: true, entry: newEntry });
   } catch (error: any) {
     console.error("Add to watchlist error:", error);
     return NextResponse.json({ error: error.message || "An unexpected error occurred." }, { status: 500 });

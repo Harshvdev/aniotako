@@ -178,10 +178,15 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
       });
       
       const data = await res.json();
-      if (res.ok) {
-        setEntry(data.entry || data.data || { ...payload, id: "temp-id", created_at: new Date().toISOString() });
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add to watchlist");
       }
+
+      setEntry(data.entry || { ...payload, id: "temp-id", created_at: new Date().toISOString() });
       router.refresh();
+    } catch (err: any) {
+      console.error("Failed to add to watchlist:", err);
+      throw err;
     } finally {
       setIsUpdating(false);
     }

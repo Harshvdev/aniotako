@@ -43,3 +43,8 @@ next-env.d.ts
 
 # directories
 /notebook
+/src/generated/prisma
+
+# Prisma
+*.db
+*.db-journal

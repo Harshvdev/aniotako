@@ -30,9 +30,10 @@ export interface WatchlistEntry {
 
 interface Props {
   initialWatchlist: WatchlistEntry[];
+  isLoggedIn?: boolean;
 }
 
-export default function WatchlistClient({ initialWatchlist }: Props) {
+export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }: Props) {
   const router = useRouter();
   
   const [filteredList, setFilteredList] = useState<WatchlistEntry[]>(initialWatchlist);
@@ -48,6 +49,46 @@ export default function WatchlistClient({ initialWatchlist }: Props) {
       alert("Failed to remove anime. Please try again.");
     }
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 sm:mt-10 pb-24 relative z-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-black text-white tracking-tight">Watchlist</h1>
+        </div>
+
+        {/* Guest Banner */}
+        <div className="p-8 rounded-2xl bg-zinc-900/40 border border-zinc-800/60 backdrop-blur-md text-center max-w-2xl mx-auto mb-12 relative overflow-hidden">
+          <div className="absolute -inset-10 bg-gradient-to-br from-fuchsia-500/5 to-cyan-500/5 opacity-50 blur-2xl pointer-events-none" />
+          <h2 className="text-xl font-bold text-white mb-3">Start building your watchlist</h2>
+          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+            Sign in to create your personal watchlist, track your episode progress, and get automated push notifications when new episodes release.
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <Link 
+              href="/login" 
+              className="px-6 py-2.5 rounded-lg bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+            >
+              Sign In
+            </Link>
+            <Link 
+              href="/signup" 
+              className="px-6 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-700 transition-all hover:scale-105 active:scale-95"
+            >
+              Sign Up
+            </Link>
+          </div>
+        </div>
+
+        {/* Search Box */}
+        <div className="max-w-2xl mx-auto">
+          <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 text-center">Search & Explore Anime</h3>
+          <AddAnimeSearch />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 sm:mt-10 pb-24 relative z-10">

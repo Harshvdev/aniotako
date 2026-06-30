@@ -16,21 +16,24 @@ export default async function AppLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
+  let displayName = "";
+  let avatarInitial = "";
+  let email = "";
+
+  if (user) {
+    // Fetch the user's profile to get the display_name
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+
+    // Fallback logic (Display Name -> Email Prefix -> "User")
+    const emailPrefix = user.email ? user.email.split('@')[0] : "User";
+    displayName = profile?.display_name || emailPrefix;
+    avatarInitial = displayName.charAt(0).toUpperCase();
+    email = user.email || "";
   }
-
-  // THE FIX: Fetch the user's profile to get the display_name
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
-    .single();
-
-  // THE FIX: Fallback logic (Display Name -> Email Prefix -> "User")
-  const emailPrefix = user.email ? user.email.split('@')[0] : "User";
-  const displayName = profile?.display_name || emailPrefix;
-  const avatarInitial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 pb-20">
@@ -65,13 +68,25 @@ export default async function AppLayout({
 
             {/* Right: User Menu & Notifications */}
             <div className="flex items-center justify-end gap-3 sm:gap-4 flex-1">
-              <NotificationBell />
-              {/* THE FIX: Pass the new computed props down to the component */}
-              <UserDropdown 
-                email={user.email} 
-                displayName={displayName} 
-                avatarInitial={avatarInitial} 
-              />
+              {user ? (
+                <>
+                  <NotificationBell />
+                  <UserDropdown 
+                    email={email} 
+                    displayName={displayName} 
+                    avatarInitial={avatarInitial} 
+                  />
+                </>
+              ) : (
+                <>
+                  <Link href="/login" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                    Sign In
+                  </Link>
+                  <Link href="/signup" className="px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white rounded-lg hover:opacity-90 text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(217,70,239,0.3)]">
+                    Sign Up
+                  </Link>
+                </>
+              )}
             </div>
 
           </div>
@@ -80,7 +95,7 @@ export default async function AppLayout({
         {/* Page Content injected here */}
         {children}
 
-        <GlobalEnrichmentTracker />
+        {user && <GlobalEnrichmentTracker />}
         
       </TitleLanguageProvider>
     </div>

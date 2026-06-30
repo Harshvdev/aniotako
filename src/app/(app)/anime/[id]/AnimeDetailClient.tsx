@@ -16,6 +16,7 @@ interface Props {
     notification_format: string;
     countdown_enabled: boolean;
   };
+  isLoggedIn?: boolean;
 }
 
 type AiringSlot = {
@@ -76,7 +77,7 @@ const ANILIST_DETAIL_QUERY = `
   }
 `;
 
-export default function AnimeDetailClient({ anime: initialAnime, error, initialEntry, preferences }: Props) {
+export default function AnimeDetailClient({ anime: initialAnime, error, initialEntry, preferences, isLoggedIn = true }: Props) {
   const params = useParams();
   const malId = parseInt(params.id as string, 10);
 
@@ -166,11 +167,12 @@ export default function AnimeDetailClient({ anime: initialAnime, error, initialE
       anime={animeData} 
       initialEntry={initialEntry} 
       preferences={preferences} 
+      isLoggedIn={isLoggedIn}
     />
   );
 }
 
-function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
+function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true }: Props) {
   const router = useRouter();
   const [entry, setEntry] = useState(initialEntry);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -503,6 +505,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
               onUpdate={handleUpdate}
               episodes={totalEpisodeCount}
               timezone={timezone}
+              isLoggedIn={isLoggedIn}
             />
           </div>
         </div>
@@ -584,6 +587,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
               onUpdate={handleUpdate}
               episodes={totalEpisodeCount}
               timezone={timezone}
+              isLoggedIn={isLoggedIn}
             />
           </div>
 
@@ -797,13 +801,30 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
   );
 }
 
-function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone }: any) {
+function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone, isLoggedIn = true }: any) {
   const [showCompletePrompt, setShowCompletePrompt] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const params = useParams();
+  const malId = params.id as string;
+  const [nextPath, setNextPath] = useState(`/anime/${malId}`);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (typeof window !== "undefined") {
+      setNextPath(window.location.pathname + window.location.search);
+    }
+  }, [malId]);
+
+  if (!isLoggedIn) {
+    return (
+      <Link 
+        href={`/login?next=${encodeURIComponent(nextPath)}`} 
+        className="w-full block text-center py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]"
+      >
+        Sign in to Track
+      </Link>
+    );
+  }
 
   if (!entry) {
     return (

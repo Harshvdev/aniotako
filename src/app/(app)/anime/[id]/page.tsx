@@ -11,28 +11,36 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
   
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const isLoggedIn = !!user;
 
-  // 1. Fetch Watchlist Entry
-  const { data: watchlistEntry } = await supabase
-    .from("watchlist_entries")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("mal_id", mal_id)
-    .single();
-
-  // 2. Direct Database Query for Preferences
-  const { data: prefsRow } = await supabase
-    .from("user_preferences")
-    .select("timezone, notification_format, countdown_enabled")
-    .eq("user_id", user.id)
-    .single();
-
-  const userPrefs = prefsRow || {
+  let watchlistEntry = null;
+  let userPrefs = {
     timezone: "",
     notification_format: "sub",
     countdown_enabled: true,
   };
+
+  if (isLoggedIn && user) {
+    // 1. Fetch Watchlist Entry
+    const { data: entry } = await supabase
+      .from("watchlist_entries")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("mal_id", mal_id)
+      .single();
+    watchlistEntry = entry;
+
+    // 2. Direct Database Query for Preferences
+    const { data: prefsRow } = await supabase
+      .from("user_preferences")
+      .select("timezone, notification_format, countdown_enabled")
+      .eq("user_id", user.id)
+      .single();
+
+    if (prefsRow) {
+      userPrefs = prefsRow;
+    }
+  }
 
   // 3. Fetch details directly using the server-side helper
   let anilistData = null;
@@ -98,6 +106,7 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
       error={errorType}
       initialEntry={watchlistEntry || null} 
       preferences={userPrefs} 
+      isLoggedIn={isLoggedIn}
     />
   );
 }

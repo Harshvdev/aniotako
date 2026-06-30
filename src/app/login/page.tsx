@@ -19,7 +19,9 @@ function LoginForm() {
 
   // If the middleware redirected them here, it passed a "?next=/some-path" parameter.
   // We can use this to send them back to where they originally wanted to go!
-  const nextUrl = searchParams.get("next") || "/watchlist";
+  const rawNext = searchParams.get("next") || "/watchlist";
+  const isValidNext = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/\\") && !rawNext.startsWith("\\");
+  const nextUrl = isValidNext ? rawNext : "/watchlist";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

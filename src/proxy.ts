@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest) {
   const user = await getUserWithTimeout(supabase);
 
   // 4. Define our routing rules
-  const protectedPaths = ["/watchlist", "/import", "/settings", "/profile"];
+  const protectedPaths = ["/settings", "/profile"];
   const isProtectedPath = protectedPaths.some((p) => path.startsWith(p));
 
   const isApiRoute = path.startsWith("/api/");
@@ -77,6 +77,13 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = authPaths.includes(path);
 
   // 5. Execute Routing Logic
+  if (path === "/") {
+    const redirectUrl = url.clone();
+    redirectUrl.pathname = "/watchlist";
+    redirectUrl.search = "";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   if (!user) {
     // Do NOT redirect API requests. Return a 401 JSON error instead.
     if (isApiRoute && !isCronRoute) {
@@ -94,8 +101,8 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
   } else {
-    // If logged in, and trying to access login/signup pages or the root landing page
-    if (isAuthPath || path === "/") {
+    // If logged in, and trying to access login/signup pages
+    if (isAuthPath) {
       const redirectUrl = url.clone();
       redirectUrl.pathname = "/watchlist";
       redirectUrl.search = "";

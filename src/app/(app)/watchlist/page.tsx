@@ -8,7 +8,9 @@ export default async function WatchlistPage() {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    return <WatchlistClient initialWatchlist={[]} isLoggedIn={false} />;
+  }
 
   // 1. Fetch user's core watchlist entries
   const { data: entries } = await supabase

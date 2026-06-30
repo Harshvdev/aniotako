@@ -39,6 +39,47 @@ const getSafeDateString = (d: Date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const getDateStringInTz = (unixSeconds: number, tz: string) => {
+  try {
+    const d = new Date(unixSeconds * 1000);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(d);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    const d = new Date(unixSeconds * 1000);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+};
+
+const fetchChunk = async (chunk: any) => {
+  const response = await fetch("https://graphql.anilist.co", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({
+      query: chunk.query,
+      variables: chunk.variables,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`AniList returned status ${response.status}`);
+  }
+  return response.json();
+};
+
 export default function CalendarPage() {
   const { getTitle } = useTitleLanguage();
   const [selectedDate, setSelectedDate] = useState(() => getSafeDateString(new Date()));
@@ -80,9 +121,49 @@ export default function CalendarPage() {
         }
         
         const json = await res.json();
+        const chunks = json.chunks || [];
+        const userEntriesMap = json.userEntriesMap || {};
+
+        if (chunks.length === 0) {
+          setAnimeList([]);
+          return;
+        }
+
+        // Fetch AniList GraphQL data client-side in parallel
+        const results = await Promise.all(chunks.map(fetchChunk));
+        const allSchedules: any[] = [];
         
+        results.forEach((r: any) => {
+          const schedules = r.data?.Page?.airingSchedules || [];
+          allSchedules.push(...schedules);
+        });
+
+        // Map and merge with user watchlist info
+        const mappedData: CalendarEntry[] = allSchedules
+          .map((sched: any) => {
+            const media = sched.media;
+            const userEntry = userEntriesMap[media.id];
+            if (!userEntry) return null;
+
+            return {
+              mal_id: media.idMal || userEntry.mal_id,
+              anilist_id: media.id,
+              title: media.title.romaji || media.title.english || "",
+              title_english: media.title.english,
+              title_romaji: media.title.romaji,
+              poster_url: media.coverImage?.large || "",
+              format: media.format || "Unknown",
+              airingAt: sched.airingAt,
+              episode: sched.episode,
+              total_episodes: media.episodes,
+              status: userEntry.status,
+              watched_episodes: userEntry.watched_episodes,
+            };
+          })
+          .filter((entry): entry is CalendarEntry => entry !== null);
+
         // Sort ascending by default (early airers first)
-        const sortedData = (json.data || []).sort((a: CalendarEntry, b: CalendarEntry) => {
+        const sortedData = mappedData.sort((a: CalendarEntry, b: CalendarEntry) => {
           if (a.airingAt && b.airingAt) return a.airingAt - b.airingAt;
           if (a.airingAt) return -1;
           if (b.airingAt) return 1;
@@ -123,9 +204,25 @@ export default function CalendarPage() {
           const res = await fetch(`/api/calendar?date=${mondayStr}&week=true`);
           if (res.ok) {
             const json = await res.json();
-            if (json.dotsByDate) {
-              setDots(prev => ({ ...prev, ...json.dotsByDate }));
+            const chunks = json.chunks || [];
+            
+            if (chunks.length === 0) {
+              setDots({});
+              return;
             }
+
+            const results = await Promise.all(chunks.map(fetchChunk));
+            const newDots: Record<string, boolean> = {};
+            
+            results.forEach((r: any) => {
+              const schedules = r.data?.Page?.airingSchedules || [];
+              schedules.forEach((sched: any) => {
+                const dateStr = getDateStringInTz(sched.airingAt, userTz);
+                newDots[dateStr] = true;
+              });
+            });
+
+            setDots(prev => ({ ...prev, ...newDots }));
           }
         } catch (e) {
           console.error("Failed to load week dots:", e);
@@ -133,7 +230,7 @@ export default function CalendarPage() {
       };
       fetchWeekDots();
     }
-  }, [selectedDate, currentWeekStart]);
+  }, [selectedDate, currentWeekStart, userTz]);
 
   const buildStripDays = () => {
     const [y, m, d] = selectedDate.split('-').map(Number);

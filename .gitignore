@@ -44,6 +44,7 @@ next-env.d.ts
 # directories
 /notebook
 /src/generated/prisma
+/graphify-out
 
 # Prisma
 *.db

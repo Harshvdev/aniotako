@@ -8,8 +8,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  
+  /* Font Family Definitions */
+  --font-sans: var(--font-plus-jakarta-sans), var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), var(--font-geist-mono), monospace;
+  --font-display: var(--font-outfit), sans-serif;
+  --font-serif: var(--font-playfair-display), serif;
+  --font-space: var(--font-space-grotesk), sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +27,5 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }

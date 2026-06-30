@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import https from "https";
 
 const ANILIST_QUERY = `
@@ -177,7 +178,12 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
           const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name
                           || anilistData.studios?.nodes?.[0]?.name || null;
 
-          await supabase.from("anime_metadata").upsert({
+          const supabaseAdmin = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+
+          const { error: upsertErr } = await supabaseAdmin.from("anime_metadata").upsert({
             mal_id,
             anilist_id: anilistData.id,
             title: anilistData.title.romaji || anilistData.title.english,
@@ -196,6 +202,10 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
             cached_at: new Date().toISOString(),
             anilist_raw: anilistData
           });
+
+          if (upsertErr) {
+            console.error(`[API] Failed to upsert metadata for ${mal_id}:`, upsertErr.message);
+          }
         }
       }
     }

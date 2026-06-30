@@ -97,7 +97,14 @@ export default function WatchlistFilter({ entries, onFilter }: WatchlistFilterPr
         case "Recently Added":
         case "Default":
         default:
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          const idA = Number(a.id) || 0;
+          const idB = Number(b.id) || 0;
+          if (idA !== 0 && idB !== 0) {
+            return idB - idA;
+          }
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
       }
     });
 

@@ -271,15 +271,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // --- Step 4: Unified Processing & Validation Strategy ---
-    let cacheUpdatedCount = 0;
-    const upsertPayloads: any[] = [];
-    const structuralValidatedShows: any[] = [];
+    // --- Step 4: Group & Merge Schedule Data by Anime ---
+    const groupedShows = new Map<number, any>();
 
     matchedShows.forEach((show) => {
       const anilistId = show.parsedAnilistId;
       const malId = anilistToMalMap.get(anilistId) ?? null;
-      
+      const posterUrl = show.imageVersionRoute ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}` : null;
+
       const rawAirAt = toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawAirAt);
       const subAirAt = toUnix(show.subPostDate ?? show.subAirAt ?? show.subEpisodeDateTime) ?? rawAirAt;
       const dubAirAt = toUnix(show.dubPostDate ?? show.dubAirAt); 
@@ -287,39 +286,77 @@ export async function GET(req: NextRequest) {
       const rawEpisodeNumber = normalizeEpisodeNumber(show.episodeNumber ?? show.rawEpisodeNumber);
       const subEpisodeNumber = normalizeEpisodeNumber(show.subEpisodeNumber) ?? rawEpisodeNumber;
       const dubEpisodeNumber = normalizeEpisodeNumber(show.dubEpisodeNumber) ?? (rawEpisodeNumber ? Math.max(rawEpisodeNumber - 1, 1) : null);
-      
-      const nextAiringAt = rawAirAt ?? subAirAt ?? dubAirAt;
 
-      // Ensure that if a dub air profile is tracking with valid episode number, it doesn't get blocked by missing timestamp
-      if (!nextAiringAt || (rawEpisodeNumber === null && subEpisodeNumber === null && dubEpisodeNumber === null)) {
-        console.warn(`[CRON] Structural validation failed for AniList ID ${anilistId}. Isolating from execution loop.`);
-        return;
+      const episodeDateVal = toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawAirAt ?? show.subPostDate ?? show.subAirAt ?? show.dubPostDate ?? show.dubAirAt);
+      const episodeNumVal = normalizeEpisodeNumber(show.episodeNumber ?? show.rawEpisodeNumber ?? show.subEpisodeNumber ?? show.dubEpisodeNumber);
+
+      if (!groupedShows.has(anilistId)) {
+        groupedShows.set(anilistId, {
+          anilist_id: anilistId,
+          mal_id: malId,
+          title: show.title,
+          poster_url: posterUrl,
+          raw_air_at: null,
+          sub_air_at: null,
+          dub_air_at: null,
+          raw_next_episode_number: null,
+          sub_next_episode_number: null,
+          dub_next_episode_number: null,
+          next_episode_number: null,
+          next_airing_at: null,
+          schedule_updated_at: now.toISOString(),
+        });
       }
 
-      // Restored original schema property targets matching File 1 logic safely
-      upsertPayloads.push({
-        anilist_id: anilistId,
-        mal_id: malId, 
-        raw_air_at: rawAirAt,
-        sub_air_at: subAirAt,
-        dub_air_at: dubAirAt,
-        raw_next_episode_number: rawEpisodeNumber,
-        sub_next_episode_number: subEpisodeNumber,
-        dub_next_episode_number: dubEpisodeNumber,
-        next_episode_number: rawEpisodeNumber,
-        next_airing_at: nextAiringAt,
-        schedule_updated_at: now.toISOString(),
-      });
+      const payload = groupedShows.get(anilistId);
 
-      structuralValidatedShows.push(show);
+      if (show.airType === "raw") {
+        payload.raw_air_at = episodeDateVal;
+        payload.raw_next_episode_number = episodeNumVal;
+        payload.next_episode_number = episodeNumVal;
+      } else if (show.airType === "sub") {
+        payload.sub_air_at = episodeDateVal;
+        payload.sub_next_episode_number = episodeNumVal;
+      } else if (show.airType === "dub") {
+        payload.dub_air_at = episodeDateVal;
+        payload.dub_next_episode_number = episodeNumVal;
+      }
+    });
+
+    // Fill in fallbacks and calculate next_airing_at
+    const upsertPayloads: any[] = [];
+    groupedShows.forEach((payload) => {
+      // Fallback sub_air_at to raw_air_at if sub is null
+      if (payload.sub_air_at === null) {
+        payload.sub_air_at = payload.raw_air_at;
+      }
+      if (payload.sub_next_episode_number === null) {
+        payload.sub_next_episode_number = payload.raw_next_episode_number;
+      }
+      // Fallback dub_next_episode_number if null
+      if (payload.dub_next_episode_number === null && payload.raw_next_episode_number !== null) {
+        payload.dub_next_episode_number = Math.max(payload.raw_next_episode_number - 1, 1);
+      }
+
+      // next_airing_at is the earliest of the non-null airing times
+      const times = [payload.raw_air_at, payload.sub_air_at, payload.dub_air_at].filter(t => t !== null) as number[];
+      payload.next_airing_at = times.length > 0 ? Math.min(...times) : null;
+
+      if (payload.next_airing_at !== null) {
+        upsertPayloads.push(payload);
+      } else {
+        console.warn(`[CRON] Structural validation failed for AniList ID ${payload.anilist_id}. Isolating from execution loop.`);
+      }
     });
 
     // Bulk execute database metadata updates matching unique target schema constraint ('mal_id') from File 1
-    for (let i = 0; i < upsertPayloads.length; i += DB_BATCH_SIZE) {
-      const chunk = upsertPayloads.slice(i, i + DB_BATCH_SIZE);
+    let cacheUpdatedCount = 0;
+    const dbPayloads = upsertPayloads.map(({ title, poster_url, ...dbData }) => dbData);
+    for (let i = 0; i < dbPayloads.length; i += DB_BATCH_SIZE) {
+      const chunk = dbPayloads.slice(i, i + DB_BATCH_SIZE);
       const { error: upsertError } = await supabase
         .from("anime_metadata")
-        .upsert(chunk, { onConflict: "mal_id" }); // Corrected alignment to File 1 unique structural target
+        .upsert(chunk, { onConflict: "mal_id" });
 
       if (!upsertError) cacheUpdatedCount += chunk.length;
       else console.error("[CRON] Batch metadata cache sync failure:", upsertError.message);
@@ -330,24 +367,15 @@ export async function GET(req: NextRequest) {
     const candidateQStashMessages: any[] = [];
     const allCandidateKeys: string[] = [];
 
-    structuralValidatedShows.forEach((show) => {
-      const anilistId = show.parsedAnilistId;
-      const malId = anilistToMalMap.get(anilistId) || null;
-      const posterUrl = show.imageVersionRoute ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}` : null;
-
-      const rawAirAt = toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawAirAt);
-      const subAirAt = toUnix(show.subPostDate ?? show.subAirAt ?? show.subEpisodeDateTime) ?? rawAirAt;
-      // Dub structural runtime timestamp assignment tracking fallbacks
-      const dubAirAt = toUnix(show.dubPostDate ?? show.dubAirAt) ?? (subAirAt ? subAirAt + 86400 : null);
-
-      const rawEpisodeNumber = normalizeEpisodeNumber(show.episodeNumber);
-      const subEpisodeNumber = normalizeEpisodeNumber(show.subEpisodeNumber ?? show.episodeNumber);
-      const dubEpisodeNumber = normalizeEpisodeNumber(show.dubEpisodeNumber) || (show.episodeNumber ? Math.max(Number(show.episodeNumber) - 1, 1) : null);
+    upsertPayloads.forEach((payload) => {
+      const anilistId = payload.anilist_id;
+      const malId = payload.mal_id;
+      const posterUrl = payload.poster_url;
 
       const formats = [
-        { type: "raw" as const, time: rawAirAt, ep: rawEpisodeNumber },
-        { type: "sub" as const, time: subAirAt, ep: subEpisodeNumber },
-        { type: "dub" as const, time: dubAirAt, ep: dubEpisodeNumber }
+        { type: "raw" as const, time: payload.raw_air_at, ep: payload.raw_next_episode_number },
+        { type: "sub" as const, time: payload.sub_air_at, ep: payload.sub_next_episode_number },
+        { type: "dub" as const, time: payload.dub_air_at, ep: payload.dub_next_episode_number }
       ];
 
       for (const fmt of formats) {
@@ -374,7 +402,7 @@ export async function GET(req: NextRequest) {
               episode: fmt.ep,
               format: fmt.type,
               scheduled_at: fmt.time,
-              title: show.title,
+              title: payload.title,
               poster_url: posterUrl,
             },
             notBefore: fmt.time,
@@ -451,7 +479,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       shows_scanned: allTimetableShows.length,
       watched_anilist_ids: watchedAnilistIds.size,
-      matched_shows: structuralValidatedShows.length,
+      matched_shows: upsertPayloads.length,
       in_window: inWindowCount,
       queued: queuedStats,
       cache_updated: cacheUpdatedCount,

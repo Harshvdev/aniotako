@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
@@ -9,6 +9,7 @@ import { formatAiringTime, formatDateOnly, formatTimeOnly, getCountdownParts } f
 
 interface Props {
   anime: any;
+  error?: string | null;
   initialEntry: any;
   preferences: {
     timezone: string;
@@ -32,7 +33,144 @@ const PRIMARY_GENRES = new Set([
   "Slice of Life", "Space", "Sports", "Super Power", "Supernatural", "Thriller", "Vampire", "Food"
 ]);
 
-export default function AnimeDetailClient({ anime, initialEntry, preferences }: Props) {
+const ANILIST_DETAIL_QUERY = `
+  query ($idMal: Int) {
+    Media(idMal: $idMal, type: ANIME) {
+      id
+      idMal
+      title { romaji english native }
+      description
+      coverImage { large extraLarge }
+      bannerImage
+      format
+      status
+      episodes
+      duration
+      averageScore
+      meanScore
+      popularity
+      isAdult
+      genres
+      tags { name }
+      studios { nodes { name isAnimationStudio } }
+      season
+      seasonYear
+      startDate { year month day }
+      endDate { year month day }
+      source
+      countryOfOrigin
+      nextAiringEpisode { airingAt episode timeUntilAiring }
+      airingSchedule { nodes { airingAt episode } }
+      characters (sort: [FAVOURITES_DESC], perPage: 12) {
+        edges { role node { name { full native } image { medium } } }
+      }
+      recommendations (sort: [RATING_DESC], perPage: 10) {
+        nodes { mediaRecommendation { id idMal title { romaji english } coverImage { extraLarge } format averageScore } }
+      }
+      relations {
+        edges { relationType node { id idMal title { romaji english } coverImage { medium } format status } }
+      }
+      trailer { id site }
+      externalLinks { url site }
+    }
+  }
+`;
+
+export default function AnimeDetailClient({ anime: initialAnime, error, initialEntry, preferences }: Props) {
+  const params = useParams();
+  const malId = parseInt(params.id as string, 10);
+
+  const [animeData, setAnimeData] = useState<any>(initialAnime);
+  const [detailLoading, setDetailLoading] = useState(!initialAnime);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Client-side fallback fetch
+  useEffect(() => {
+    if (animeData) return;
+
+    const fetchDetailClientSide = async () => {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const response = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            query: ANILIST_DETAIL_QUERY,
+            variables: { idMal: malId }
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`AniList returned status ${response.status}`);
+        }
+
+        const json = await response.json();
+        if (json.errors) {
+          throw new Error(json.errors[0].message);
+        }
+
+        const data = json.data?.Media;
+        if (data) {
+          setAnimeData(data);
+        } else {
+          throw new Error("Anime not found on AniList");
+        }
+      } catch (err: any) {
+        console.error("[Detail Fallback] Client-side fetch failed:", err);
+        setDetailError(err.message || "Failed to fetch anime details.");
+      } finally {
+        setDetailLoading(false);
+      }
+    };
+
+    fetchDetailClientSide();
+  }, [animeData, malId]);
+
+  if (detailLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-zinc-400">
+        <div className="w-12 h-12 border-4 border-zinc-700 border-t-fuchsia-500 rounded-full animate-spin mb-6"></div>
+        <h2 className="text-xl font-bold text-white mb-2">
+          {error === "rate_limited" ? "Server is busy" : "Connection timed out"}
+        </h2>
+        <p className="text-sm max-w-md text-center text-zinc-500">
+          {error === "rate_limited"
+            ? "We are fetching details directly from AniList via your browser..."
+            : "The server timed out, but we are retrying directly from your browser..."}
+        </p>
+      </div>
+    );
+  }
+
+  if (detailError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-zinc-400">
+        <svg className="w-16 h-16 text-red-500/80 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <h2 className="text-2xl font-bold text-white mb-2">Failed to Load Anime</h2>
+        <p className="mb-6 max-w-sm text-center text-zinc-500">{detailError}</p>
+        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-full transition-colors font-semibold">
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <AnimeDetailInner 
+      anime={animeData} 
+      initialEntry={initialEntry} 
+      preferences={preferences} 
+    />
+  );
+}
+
+function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
   const router = useRouter();
   const [entry, setEntry] = useState(initialEntry);
   const [isUpdating, setIsUpdating] = useState(false);

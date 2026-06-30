@@ -538,6 +538,22 @@ model anime_metadata {
   @@index([anilist_id], map: "idx_anime_metadata_anilist_id")
   @@index([airing_status], map: "idx_meta_airing_status", where: raw("(airing_status = 'RELEASING'::text)"))
   @@index([next_airing_at], map: "idx_meta_next_airing", where: raw("(next_airing_at IS NOT NULL)"))
+  @@index([cached_at], map: "idx_anime_metadata_cached_at")
+  @@schema("public")
+}
+
+model api_status {
+  api_name      String   @id
+  blocked_until DateTime @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model active_api_requests {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  api_name   String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
   @@schema("public")
 }
 

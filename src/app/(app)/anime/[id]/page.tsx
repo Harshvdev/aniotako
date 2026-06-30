@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { headers, cookies } from "next/headers"; // Kept for the AniList internal fetch
+import { getAnimeDetails } from "@/lib/anime";
 import AnimeDetailClient from "./AnimeDetailClient";
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +21,7 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     .eq("mal_id", mal_id)
     .single();
 
-  // 2. Direct Database Query for Preferences (As recommended)
+  // 2. Direct Database Query for Preferences
   const { data: prefsRow } = await supabase
     .from("user_preferences")
     .select("timezone, notification_format, countdown_enabled")
@@ -34,50 +34,68 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
     countdown_enabled: true,
   };
 
-  // 3. Reconstruct connection details ONLY for the AniList internal fetch
-  const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = host?.includes("localhost") ? "http" : "https";
-
-  const cookieStore = await cookies();
-  const cookieString = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join("; ");
-
-  const internalApiUrl = `${protocol}://${host}/api/anilist/anime/${mal_id}`;
+  // 3. Fetch details directly using the server-side helper
   let anilistData = null;
-  
+  let errorType: string | null = null;
+
   try {
-    console.log(`[PAGE] Attempting internal fetch to: ${internalApiUrl}`);
-    const res = await fetch(internalApiUrl, { 
-      cache: 'no-store',
-      headers: {
-        'Cookie': cookieString
-      }
-    });
-    
-    if (res.ok) {
-      anilistData = await res.json();
-      console.log(`[PAGE] Internal fetch SUCCESS.`);
+    const res = await getAnimeDetails(mal_id);
+    if (res && res.error) {
+      errorType = res.error;
     } else {
-      const errorText = await res.text();
-      console.error(`[PAGE] Internal fetch FAILED with HTTP ${res.status}:`, errorText);
+      anilistData = res;
     }
   } catch (err) {
-    console.error("[PAGE] Internal fetch crashed entirely:", err);
+    console.error("[PAGE] Failed to fetch anime details:", err);
+    errorType = "network_error";
   }
 
-  if (!anilistData || anilistData.error) {
-    console.warn(`[PAGE] Rendering "Not Found" UI. anilistData state:`, anilistData);
+  // If there's no data and it's not a rate-limit/network error, it's a true 404
+  if (!anilistData && !errorType) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-zinc-400">
         <h2 className="text-2xl font-bold text-white mb-2">Anime Not Found</h2>
-        <p>We couldn't fetch details for this anime. Please try again later.</p>
+        <p>We couldn't find details for this anime. It might not exist on AniList.</p>
       </div>
     );
   }
 
+  // 4. Build Final Combined Payload
+  let mergedAnime = null;
+  if (anilistData) {
+    const { data: meta } = await supabase
+      .from("anime_metadata")
+      .select("*")
+      .eq("mal_id", mal_id)
+      .single();
+
+    const nextEpisodeNumber =
+      meta?.raw_next_episode_number ??
+      meta?.next_episode_number ??
+      meta?.next_episode_num ??
+      anilistData?.nextAiringEpisode?.episode ??
+      null;
+
+    mergedAnime = {
+      ...anilistData,
+      anime_metadata: meta ? {
+        raw_air_at: meta.raw_air_at,
+        sub_air_at: meta.sub_air_at,
+        dub_air_at: meta.dub_air_at,
+        raw_next_episode_number: meta.raw_next_episode_number ?? null,
+        sub_next_episode_number: meta.sub_next_episode_number ?? null,
+        dub_next_episode_number: meta.dub_next_episode_number ?? null,
+        next_airing_at: meta.next_airing_at,
+        next_episode_number: nextEpisodeNumber,
+        schedule_updated_at: meta.schedule_updated_at,
+      } : null,
+    };
+  }
+
   return (
     <AnimeDetailClient 
-      anime={anilistData} 
+      anime={mergedAnime} 
+      error={errorType}
       initialEntry={watchlistEntry || null} 
       preferences={userPrefs} 
     />

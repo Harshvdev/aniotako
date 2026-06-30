@@ -139,28 +139,28 @@ export default function CalendarPage() {
         });
 
         // Map and merge with user watchlist info
-        const mappedData: CalendarEntry[] = allSchedules
-          .map((sched: any) => {
-            const media = sched.media;
-            const userEntry = userEntriesMap[media.id];
-            if (!userEntry) return null;
+        const mappedData: CalendarEntry[] = [];
+        allSchedules.forEach((sched: any) => {
+          const media = sched.media;
+          if (!media) return;
+          const userEntry = userEntriesMap[media.id];
+          if (!userEntry) return;
 
-            return {
-              mal_id: media.idMal || userEntry.mal_id,
-              anilist_id: media.id,
-              title: media.title.romaji || media.title.english || "",
-              title_english: media.title.english,
-              title_romaji: media.title.romaji,
-              poster_url: media.coverImage?.large || "",
-              format: media.format || "Unknown",
-              airingAt: sched.airingAt,
-              episode: sched.episode,
-              total_episodes: media.episodes,
-              status: userEntry.status,
-              watched_episodes: userEntry.watched_episodes,
-            };
-          })
-          .filter((entry): entry is CalendarEntry => entry !== null);
+          mappedData.push({
+            mal_id: media.idMal || userEntry.mal_id,
+            anilist_id: media.id,
+            title: media.title.romaji || media.title.english || "",
+            title_english: media.title.english,
+            title_romaji: media.title.romaji,
+            poster_url: media.coverImage?.large || "",
+            format: media.format || "Unknown",
+            airingAt: sched.airingAt,
+            episode: sched.episode,
+            total_episodes: media.episodes,
+            status: userEntry.status,
+            watched_episodes: userEntry.watched_episodes,
+          });
+        });
 
         // Sort ascending by default (early airers first)
         const sortedData = mappedData.sort((a: CalendarEntry, b: CalendarEntry) => {

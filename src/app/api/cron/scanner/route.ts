@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: "No airing shows found for this tracking period." });
     }
 
-    // --- Step 2: Fetch Current User Watchlists from Supabase ---
+    // --- Step 2: Fetch All Anime Metadata from Supabase ---
     const { data: watchedRows, error: dbError } = await supabase
       .from("anime_metadata")
       .select(`
@@ -207,11 +207,21 @@ export async function GET(req: NextRequest) {
         title_english,
         title_romaji,
         title_native,
-        anilist_raw,
-        watchlist_entries!inner(status)
+        anilist_raw
       `)
-      .eq("watchlist_entries.status", "watching")
-      .not("anilist_id", "is", null);
+      .not("anilist_id", "is", null)
+      .limit(10000);
+
+    // Fetch the list of mal_ids that are currently being watched by any user
+    const { data: watchingEntries, error: watchError } = await supabase
+      .from("watchlist_entries")
+      .select("mal_id")
+      .eq("status", "watching");
+
+    const watchingMalIds = new Set<number>();
+    if (!watchError && watchingEntries) {
+      watchingEntries.forEach((entry: any) => watchingMalIds.add(Number(entry.mal_id)));
+    }
 
     if (dbError) throw dbError;
 
@@ -310,6 +320,11 @@ export async function GET(req: NextRequest) {
 
       const payload = groupedShows.get(anilistId);
 
+      const isFinished = show.status?.toLowerCase() === "finished";
+      if (isFinished) {
+        payload.is_finished = true;
+      }
+
       if (show.airType === "raw") {
         payload.raw_air_at = episodeDateVal;
         payload.raw_next_episode_number = episodeNumVal;
@@ -326,6 +341,21 @@ export async function GET(req: NextRequest) {
     // Fill in fallbacks and calculate next_airing_at
     const upsertPayloads: any[] = [];
     groupedShows.forEach((payload) => {
+      if (payload.is_finished) {
+        // Clear all airing schedule fields for finished shows
+        payload.raw_air_at = null;
+        payload.sub_air_at = null;
+        payload.dub_air_at = null;
+        payload.raw_next_episode_number = null;
+        payload.sub_next_episode_number = null;
+        payload.dub_next_episode_number = null;
+        payload.next_episode_number = null;
+        payload.next_airing_at = null;
+        
+        upsertPayloads.push(payload);
+        return;
+      }
+
       // Fallback sub_air_at to raw_air_at if sub is null
       if (payload.sub_air_at === null) {
         payload.sub_air_at = payload.raw_air_at;
@@ -351,7 +381,7 @@ export async function GET(req: NextRequest) {
 
     // Bulk execute database metadata updates matching unique target schema constraint ('mal_id') from File 1
     let cacheUpdatedCount = 0;
-    const dbPayloads = upsertPayloads.map(({ title, poster_url, ...dbData }) => dbData);
+    const dbPayloads = upsertPayloads.map(({ title, poster_url, is_finished, ...dbData }) => dbData);
     for (let i = 0; i < dbPayloads.length; i += DB_BATCH_SIZE) {
       const chunk = dbPayloads.slice(i, i + DB_BATCH_SIZE);
       const { error: upsertError } = await supabase
@@ -371,6 +401,11 @@ export async function GET(req: NextRequest) {
       const anilistId = payload.anilist_id;
       const malId = payload.mal_id;
       const posterUrl = payload.poster_url;
+
+      // Only schedule notifications if the show is actively being watched by at least one user
+      if (!malId || !watchingMalIds.has(malId)) {
+        return;
+      }
 
       const formats = [
         { type: "raw" as const, time: payload.raw_air_at, ep: payload.raw_next_episode_number },

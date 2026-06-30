@@ -93,10 +93,23 @@ export async function POST(req: Request) {
       if (!mal_id) continue;
 
       // 1. Prepare metadata upsert
+      const statusUpper = metadata.airing_status?.toUpperCase();
+      const isFinished = statusUpper === "FINISHED" || statusUpper === "FINISHED AIRING" || statusUpper === "CANCELLED";
+
       metadataUpserts.push({
         ...metadata,
         mal_id,
-        cached_at: new Date().toISOString()
+        cached_at: new Date().toISOString(),
+        ...(isFinished ? {
+          raw_air_at: null,
+          sub_air_at: null,
+          dub_air_at: null,
+          raw_next_episode_number: null,
+          sub_next_episode_number: null,
+          dub_next_episode_number: null,
+          next_episode_number: null,
+          next_airing_at: null,
+        } : {})
       });
 
       // 2. Prepare watchlist updates if necessary

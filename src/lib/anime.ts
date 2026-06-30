@@ -151,6 +151,8 @@ export async function getAnimeDetails(malId: number) {
       const mainStudio = anilistData.studios?.nodes?.find((s: any) => s.isAnimationStudio)?.name
                       || anilistData.studios?.nodes?.[0]?.name || null;
 
+      const isFinished = anilistData.status === "FINISHED" || anilistData.status === "CANCELLED";
+
       const { error: upsertErr } = await supabaseAdmin.from("anime_metadata").upsert({
         mal_id: malId,
         anilist_id: anilistData.id,
@@ -168,7 +170,17 @@ export async function getAnimeDetails(malId: number) {
         synopsis: cleanSynopsis,
         poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
         cached_at: new Date().toISOString(),
-        anilist_raw: anilistData
+        anilist_raw: anilistData,
+        ...(isFinished ? {
+          raw_air_at: null,
+          sub_air_at: null,
+          dub_air_at: null,
+          raw_next_episode_number: null,
+          sub_next_episode_number: null,
+          dub_next_episode_number: null,
+          next_episode_number: null,
+          next_airing_at: null,
+        } : {})
       });
 
       if (upsertErr) {

@@ -361,14 +361,18 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
   const nextAiringUnix = normalizeUnix(anime.nextAiringEpisode?.airingAt);
   const nextAiringEpisodeNum = anime.nextAiringEpisode?.episode ?? null;
 
-  const rawUnix = normalizeUnix(meta?.raw_air_at) ?? nextAiringUnix ?? null;
+  const dbRawUnix = normalizeUnix(meta?.raw_air_at);
+  const useNextAiring = dbRawUnix !== null && nextAiringUnix !== null && nextAiringUnix < dbRawUnix;
+
+  const rawUnix = useNextAiring ? nextAiringUnix : (dbRawUnix ?? nextAiringUnix ?? null);
   const subUnix = normalizeUnix(meta?.sub_air_at);
   const dubUnix = normalizeUnix(meta?.dub_air_at);
 
-  const rawEpisodeNumber =
-    normalizeUnix(meta?.raw_next_episode_number) ??
-    normalizeUnix(meta?.next_episode_number) ??
-    nextAiringEpisodeNum;
+  const rawEpisodeNumber = useNextAiring
+    ? nextAiringEpisodeNum
+    : (normalizeUnix(meta?.raw_next_episode_number) ??
+       normalizeUnix(meta?.next_episode_number) ??
+       nextAiringEpisodeNum);
 
   const subEpisodeNumber =
     normalizeUnix(meta?.sub_next_episode_number) ??

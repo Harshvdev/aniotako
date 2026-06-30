@@ -386,13 +386,18 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
     { key: "dub", label: "Dub", unix: dubUnix, episode: dubEpisodeNumber },
   ];
 
+  const hasAiringSchedule = rawUnix !== null || subUnix !== null || dubUnix !== null;
+  const showAiringSchedule = 
+    anime.status?.toUpperCase() !== "FINISHED" && 
+    anime.status?.toUpperCase() !== "CANCELLED" && 
+    hasAiringSchedule;
+
   useEffect(() => {
     setEntry(initialEntry);
   }, [initialEntry]);
 
   useEffect(() => {
-    const hasAnyTime = airingSlots.some((slot) => slot.unix !== null);
-    if (!preferences.countdown_enabled || !hasAnyTime) {
+    if (!preferences.countdown_enabled || !showAiringSchedule) {
       setCountdowns({});
       return;
     }
@@ -417,7 +422,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
     updateCountdowns();
     const intervalId = window.setInterval(updateCountdowns, 1000);
     return () => window.clearInterval(intervalId);
-  }, [rawUnix, subUnix, dubUnix, preferences.countdown_enabled]);
+  }, [showAiringSchedule, preferences.countdown_enabled]);
 
   const handleAdd = async () => {
     setIsUpdating(true);
@@ -527,7 +532,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences }: Props) {
           </div>
 
           {/* NEXT EPISODE COUNTDOWN CARD */}
-          {airingSlots.length > 0 && (
+          {showAiringSchedule && (
             <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl">
               <div className="mb-3">
                 <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">

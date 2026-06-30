@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const AUTH_TIMEOUT_MS = 1500;
+const AUTH_TIMEOUT_MS = 3000;
 
 async function getUserWithTimeout(supabase: any, timeoutMs = AUTH_TIMEOUT_MS) {
   return Promise.race<Promise<unknown> | Promise<null>>([

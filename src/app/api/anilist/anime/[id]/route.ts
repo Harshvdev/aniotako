@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import https from "https";
 
 const ANILIST_QUERY = `
   query ($idMal: Int) {
@@ -46,36 +45,6 @@ const ANILIST_QUERY = `
   }
 `;
 
-const fetchIPv4Json = (url: string, timeoutMs: number = 4000): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { family: 4 }, (res) => {
-      if (res.statusCode === 429) return reject(new Error("Jikan rate limited"));
-      if (res.statusCode === 404) return reject(new Error("Jikan not found"));
-      if (res.statusCode && res.statusCode !== 200) {
-        return reject(new Error(`Jikan HTTP ${res.statusCode}`));
-      }
-
-      let raw = "";
-      res.on("data", (chunk) => {
-        raw += chunk;
-      });
-
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch {
-          reject(new Error("Jikan JSON parse failed"));
-        }
-      });
-    });
-
-    req.on("error", reject);
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      reject(new Error("Jikan timeout"));
-    });
-  });
-};
 
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -214,16 +183,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       return NextResponse.json({ error: "Not found on AniList" }, { status: 404 });
     }
 
-    // 3. Fetch Historical Episodes from Jikan
-    let jikanEpisodes: any[] = [];
-    try {
-      const jikanJson = await fetchIPv4Json(`https://api.jikan.moe/v4/anime/${mal_id}/episodes`, 4000);
-      jikanEpisodes = jikanJson?.data || [];
-    } catch (jikanError) {
-      console.warn(`[API] Jikan episodes unavailable for ${mal_id}:`, jikanError);
-    }
-
-    // 4. Fill Missing Episodes & Merge Logic
+    // 3. Setup next episode information
     const nextEpisodeNumber =
       meta?.raw_next_episode_number ??
       meta?.next_episode_number ??
@@ -231,60 +191,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       anilistData?.nextAiringEpisode?.episode ??
       null;
 
-    const nextAiringUnix =
-      meta?.next_airing_at ??
-      anilistData?.nextAiringEpisode?.airingAt ??
-      meta?.raw_air_at ??
-      null;
-
-    const jikanMap = new Map<number, any>();
-    jikanEpisodes.forEach((ep: any, idx: number) => {
-      jikanMap.set(idx + 1, ep);
-    });
-
-    const lastReleasedEpisode = jikanEpisodes.length;
-    const targetMax = nextEpisodeNumber
-      ? Math.max(lastReleasedEpisode, nextEpisodeNumber)
-      : lastReleasedEpisode;
-
-    const mergedEpisodes = [];
-
-    for (let i = 1; i <= targetMax; i++) {
-      const jikanEp = jikanMap.get(i);
-
-      if (jikanEp) {
-        mergedEpisodes.push({
-          episode_number: i,
-          title: jikanEp.title || `Episode ${i}`,
-          aired: jikanEp.aired || null,
-          filler: jikanEp.filler,
-          recap: jikanEp.recap,
-          forum_url: jikanEp.forum_url,
-          is_placeholder: false,
-        });
-        continue;
-      }
-
-      if (nextEpisodeNumber && i === nextEpisodeNumber) {
-        mergedEpisodes.push({
-          episode_number: i,
-          title: `Episode ${i}`,
-          airing_at: nextAiringUnix,
-          is_placeholder: false,
-        });
-        continue;
-      }
-
-      if (nextEpisodeNumber && i < nextEpisodeNumber) {
-        mergedEpisodes.push({
-          episode_number: i,
-          title: `Episode ${i}`,
-          is_placeholder: true,
-        });
-      }
-    }
-
-    // 5. Build Final Combined Payload
+    // 4. Build Final Combined Payload (without Jikan episodes)
     const mergedAnime = {
       ...anilistData,
       anime_metadata: meta ? {
@@ -298,7 +205,6 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
         next_episode_number: nextEpisodeNumber,
         schedule_updated_at: meta.schedule_updated_at,
       } : null,
-      episodes: mergedEpisodes,
     };
 
     return NextResponse.json(mergedAnime);

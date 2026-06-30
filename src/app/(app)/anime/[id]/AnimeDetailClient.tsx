@@ -85,6 +85,129 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
     setTimezone(preferences?.timezone || storedTz || browserTz || "UTC");
   }, [preferences?.timezone]);
 
+  // Client-side episodes state
+  const [episodes, setEpisodes] = useState<any[]>([]);
+  const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [episodesError, setEpisodesError] = useState<string | null>(null);
+  const [hasFetchedEpisodes, setHasFetchedEpisodes] = useState(false);
+
+  // Fetch episodes from Jikan when the Episodes tab is opened
+  useEffect(() => {
+    if (activeTab !== "episodes" || hasFetchedEpisodes || episodesLoading) return;
+
+    const fetchEpisodes = async () => {
+      setEpisodesLoading(true);
+      setEpisodesError(null);
+
+      try {
+        const malId = anime.idMal;
+        if (!malId) {
+          throw new Error("MyAnimeList ID not found for this anime.");
+        }
+
+        let jikanEpisodes: any[] = [];
+        let success = false;
+        const retries = 3;
+
+        for (let attempt = 0; attempt < retries; attempt++) {
+          try {
+            const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/episodes`);
+            if (res.status === 429) {
+              // Rate limited, wait and retry
+              await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+              continue;
+            }
+            if (!res.ok) {
+              throw new Error(`Jikan API returned status ${res.status}`);
+            }
+            const json = await res.json();
+            jikanEpisodes = json.data || [];
+            success = true;
+            break;
+          } catch (err: any) {
+            if (attempt === retries - 1) throw err;
+            await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+          }
+        }
+
+        if (!success) {
+          throw new Error("Failed to fetch episodes from MyAnimeList.");
+        }
+
+        // Fill Missing Episodes & Merge Logic
+        const nextEpisodeNumber =
+          anime.anime_metadata?.raw_next_episode_number ??
+          anime.anime_metadata?.next_episode_number ??
+          anime.anime_metadata?.next_episode_num ??
+          anime.nextAiringEpisode?.episode ??
+          null;
+
+        const nextAiringUnix =
+          anime.anime_metadata?.next_airing_at ??
+          anime.nextAiringEpisode?.airingAt ??
+          anime.anime_metadata?.raw_air_at ??
+          null;
+
+        const jikanMap = new Map<number, any>();
+        jikanEpisodes.forEach((ep: any, idx: number) => {
+          jikanMap.set(idx + 1, ep);
+        });
+
+        const lastReleasedEpisode = jikanEpisodes.length;
+        const targetMax = nextEpisodeNumber
+          ? Math.max(lastReleasedEpisode, nextEpisodeNumber)
+          : lastReleasedEpisode;
+
+        const mergedEpisodes = [];
+
+        for (let i = 1; i <= targetMax; i++) {
+          const jikanEp = jikanMap.get(i);
+
+          if (jikanEp) {
+            mergedEpisodes.push({
+              episode_number: i,
+              title: jikanEp.title || `Episode ${i}`,
+              aired: jikanEp.aired || null,
+              filler: jikanEp.filler,
+              recap: jikanEp.recap,
+              forum_url: jikanEp.forum_url,
+              is_placeholder: false,
+            });
+            continue;
+          }
+
+          if (nextEpisodeNumber && i === nextEpisodeNumber) {
+            mergedEpisodes.push({
+              episode_number: i,
+              title: `Episode ${i}`,
+              airing_at: nextAiringUnix,
+              is_placeholder: false,
+            });
+            continue;
+          }
+
+          if (nextEpisodeNumber && i < nextEpisodeNumber) {
+            mergedEpisodes.push({
+              episode_number: i,
+              title: `Episode ${i}`,
+              is_placeholder: true,
+            });
+          }
+        }
+
+        setEpisodes(mergedEpisodes);
+        setHasFetchedEpisodes(true);
+      } catch (err: any) {
+        console.error("[Episodes] Jikan fetch failed:", err);
+        setEpisodesError(err.message || "Failed to load episodes. Please try again.");
+      } finally {
+        setEpisodesLoading(false);
+      }
+    };
+
+    fetchEpisodes();
+  }, [activeTab, hasFetchedEpisodes, episodesLoading, anime, timezone]);
+
   const normalizeUnix = (value: unknown): number | null => {
     if (value === null || value === undefined || value === "") return null;
     const n = typeof value === "number" ? value : Number(value);
@@ -430,36 +553,55 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
         {/* EPISODES TAB */}
         {activeTab === "episodes" && (
           <div className="flex flex-col gap-2">
-            {Array.isArray(anime.episodes) && anime.episodes.length > 0 ? anime.episodes.map((ep: any) => (
-              <div key={ep.episode_number} className={`flex items-center gap-4 p-4 rounded-xl border ${entry && entry.watched_episodes >= ep.episode_number ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800"}`}>
-                <div className={`w-10 text-center font-mono font-bold ${entry && entry.watched_episodes >= ep.episode_number ? "text-emerald-500" : "text-zinc-500"}`}>
-                  {ep.episode_number}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white truncate">
-                    {ep.title || `Episode ${ep.episode_number}`}
-                  </h4>
-                  {ep.airing_at && (
-                    <p className="text-xs text-fuchsia-400 font-bold mt-0.5 animate-pulse">
-                      Airing Schedule Target Set
-                    </p>
-                  )}
-                </div>
-                <div className="shrink-0 text-xs text-zinc-500 font-medium">
-                  {ep.airing_at ? (
-                    <span className="text-fuchsia-400 font-medium">
-                      Scheduled for {formatAiringTime(ep.airing_at, timezone)}
-                    </span>
-                  ) : ep.aired ? (
-                    <span className="text-zinc-500 font-medium">
-                      Released on {formatDateOnly(ep.aired, timezone)}
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500 font-medium">TBA</span>
-                  )}
-                </div>
+            {episodesLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400">
+                <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm">Loading episodes from MyAnimeList...</p>
               </div>
-            )) : <p className="text-zinc-500 text-sm">No episodes listed.</p>}
+            ) : episodesError ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-4 text-zinc-400">
+                <p className="text-sm text-rose-400">{episodesError}</p>
+                <button
+                  onClick={() => setHasFetchedEpisodes(false)}
+                  className="px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs font-semibold"
+                >
+                  Retry Fetch
+                </button>
+              </div>
+            ) : episodes.length > 0 ? (
+              episodes.map((ep: any) => (
+                <div key={ep.episode_number} className={`flex items-center gap-4 p-4 rounded-xl border ${entry && entry.watched_episodes >= ep.episode_number ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800"}`}>
+                  <div className={`w-10 text-center font-mono font-bold ${entry && entry.watched_episodes >= ep.episode_number ? "text-emerald-500" : "text-zinc-500"}`}>
+                    {ep.episode_number}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-white truncate">
+                      {ep.title || `Episode ${ep.episode_number}`}
+                    </h4>
+                    {ep.airing_at && (
+                      <p className="text-xs text-fuchsia-400 font-bold mt-0.5 animate-pulse">
+                        Airing Schedule Target Set
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-xs text-zinc-500 font-medium">
+                    {ep.airing_at ? (
+                      <span className="text-fuchsia-400 font-medium">
+                        Scheduled for {formatAiringTime(ep.airing_at, timezone)}
+                      </span>
+                    ) : ep.aired ? (
+                      <span className="text-zinc-500 font-medium">
+                        Released on {formatDateOnly(ep.aired, timezone)}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500 font-medium">TBA</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-zinc-500 text-sm">No episodes listed.</p>
+            )}
           </div>
         )}
 

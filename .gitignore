@@ -34,6 +34,7 @@ notebook*
 # env files (can opt-in for committing if needed)
 .env*
 .env.local
+
 # vercel
 .vercel
 
@@ -45,6 +46,7 @@ next-env.d.ts
 /notebook
 /src/generated/prisma
 /graphify-out
+/.agents
 
 # Prisma
 *.db

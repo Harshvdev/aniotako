@@ -39,6 +39,11 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
   const [expandedSyn, setExpandedSyn] = useState(false);
   const [activeTab, setActiveTab] = useState("related");
   const [countdowns, setCountdowns] = useState<Record<string, string>>({});
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const { getTitle } = useTitleLanguage();
 
@@ -332,7 +337,13 @@ export default function AnimeDetailClient({ anime, initialEntry, preferences }: 
           {/* Synopsis */}
           <div className="mt-6 bg-zinc-900/50 border border-zinc-800/80 p-5 rounded-2xl">
             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Synopsis</h3>
-            <p className={`text-sm text-zinc-300 leading-relaxed ${!expandedSyn && "line-clamp-4"}`} dangerouslySetInnerHTML={{ __html: anime.description || "No synopsis available." }} />
+            {mounted ? (
+              <div className={`text-sm text-zinc-300 leading-relaxed ${!expandedSyn && "line-clamp-4"}`} dangerouslySetInnerHTML={{ __html: anime.description || "No synopsis available." }} />
+            ) : (
+              <div className={`text-sm text-zinc-300 leading-relaxed ${!expandedSyn && "line-clamp-4"}`}>
+                {anime.description ? anime.description.replace(/<[^>]*>?/gm, '') : "No synopsis available."}
+              </div>
+            )}
             {anime.description && anime.description.length > 250 && (
               <button onClick={() => setExpandedSyn(!expandedSyn)} className="mt-2 text-cyan-400 hover:text-cyan-300 text-xs font-bold transition-colors">
                 {expandedSyn ? "Read Less" : "Read More"}

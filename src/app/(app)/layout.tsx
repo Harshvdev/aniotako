@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getServerUser } from "@/lib/supabase/server";
 import NotificationBell from "@/components/NotificationBell";
 import GlobalEnrichmentTracker from "@/components/GlobalEnrichmentTracker";
 import NProgressLoader from "@/components/NProgress";
@@ -14,7 +14,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getServerUser();
 
   let displayName = "";
   let avatarInitial = "";

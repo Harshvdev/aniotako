@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getServerUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import EditProfileModal from "./EditProfileModal";
@@ -18,7 +18,7 @@ function getMinutesFromDuration(durationStr: string | null) {
 
 export default async function ProfilePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getServerUser();
   if (!user) redirect("/login");
 
   // 1. Fetch Profile & Watchlist Data

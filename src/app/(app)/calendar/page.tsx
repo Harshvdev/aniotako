@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getServerUser } from "@/lib/supabase/server";
 import CalendarClient from "./CalendarClient";
 import FeatureLandingPage from "@/components/FeatureLandingPage";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getServerUser();
 
   if (user) {
     return <CalendarClient />;

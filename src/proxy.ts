@@ -110,8 +110,30 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Allow the request to proceed with the potentially updated session cookies
-  return supabaseResponse;
+  // Forward user headers to downstream pages/routes
+  const requestHeaders = new Headers(request.headers);
+  if (user) {
+    requestHeaders.set("x-user-id", (user as any).id);
+    requestHeaders.set("x-user-email", (user as any).email || "");
+  } else {
+    requestHeaders.delete("x-user-id");
+    requestHeaders.delete("x-user-email");
+  }
+
+  const finalResponse = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  // Copy set-cookie headers from supabaseResponse to finalResponse to preserve session refreshes
+  supabaseResponse.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") {
+      finalResponse.headers.append(key, value);
+    }
+  });
+
+  return finalResponse;
 }
 
 // 6. Matcher Config: Ignore static files, images, and favicon

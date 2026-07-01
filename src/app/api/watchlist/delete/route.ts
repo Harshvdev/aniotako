@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 
 export async function DELETE(req: Request) {
   try {
     const supabase = await createClient();
     
     // 1. Verify Authentication
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthUser(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // 2. Get the ID from the URL (e.g., /api/watchlist/delete?id=123)

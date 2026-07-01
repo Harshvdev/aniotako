@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { cache } from "react";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -26,4 +27,54 @@ export async function createClient() {
       },
     }
   );
+}
+
+export const getCachedUser = cache(async () => {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  } catch (error) {
+    return null;
+  }
+});
+
+export async function getServerUser() {
+  try {
+    const headersList = await headers();
+    const userId = headersList.get("x-user-id");
+    const email = headersList.get("x-user-email");
+    if (userId) {
+      return { id: userId, email: email || null } as any;
+    }
+  } catch (error) {
+    // Silently ignore errors from headers() outside request contexts (e.g. static build compile)
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  } catch (error) {
+    console.error("Failed to fetch user in getServerUser fallback:", error);
+    return null;
+  }
+}
+
+export async function getAuthUser(req?: Request) {
+  if (req) {
+    const userId = req.headers.get("x-user-id");
+    const email = req.headers.get("x-user-email");
+    if (userId) {
+      return { id: userId, email: email || null };
+    }
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  } catch (error) {
+    return null;
+  }
 }

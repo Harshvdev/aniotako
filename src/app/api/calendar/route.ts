@@ -50,10 +50,29 @@ export async function GET(req: Request) {
     const user = await getAuthUser(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Fetch watchlist entries linked with anime metadata
+    // Fetch watchlist entries linked with anime metadata and scheduling cache
     const { data: watchlist, error: watchError } = await supabase
       .from("watchlist_entries")
-      .select(`mal_id, status, watched_episodes, anime_metadata!left (anilist_id)`)
+      .select(`
+        mal_id, 
+        status, 
+        watched_episodes, 
+        anime_metadata!left (
+          anilist_id,
+          title,
+          poster_url,
+          type,
+          total_episodes,
+          title_english,
+          title_romaji,
+          raw_air_at,
+          sub_air_at,
+          dub_air_at,
+          raw_next_episode_number,
+          sub_next_episode_number,
+          dub_next_episode_number
+        )
+      `)
       .eq("user_id", user.id);
 
     if (watchError) {
@@ -62,7 +81,7 @@ export async function GET(req: Request) {
     }
 
     if (!watchlist || watchlist.length === 0) {
-      return NextResponse.json({ chunks: [], userEntriesMap: {} });
+      return NextResponse.json({ resolvedSchedules: [], chunks: [], userEntriesMap: {} });
     }
 
     // Filter out completed or dropped shows
@@ -70,39 +89,59 @@ export async function GET(req: Request) {
       (entry: any) => entry.status !== "completed" && entry.status !== "dropped"
     );
 
-    // Build a map of entries using AniList ID as the key for easy frontend cross-referencing
+    // Build a map of entries and resolve schedules from DB cache where possible
     const userEntriesMap: Record<number, any> = {};
-    const anilistIds: number[] = [];
+    const fallbackAnilistIds: number[] = [];
+    const resolvedSchedules: any[] = [];
 
     activeWatchlist.forEach((entry: any) => {
-      let anilist_id = null;
-      if (entry.anime_metadata) {
-        anilist_id = Array.isArray(entry.anime_metadata) 
-          ? entry.anime_metadata[0]?.anilist_id 
-          : entry.anime_metadata.anilist_id;
-      }
-      
-      const parsedId = Number(anilist_id);
-      if (!isNaN(parsedId) && parsedId > 0) {
-        anilistIds.push(parsedId);
-        userEntriesMap[parsedId] = {
+      const meta = Array.isArray(entry.anime_metadata) ? entry.anime_metadata[0] : entry.anime_metadata;
+      if (!meta) return;
+
+      const anilistId = Number(meta.anilist_id);
+      if (isNaN(anilistId) || anilistId <= 0) return;
+
+      userEntriesMap[anilistId] = {
+        status: entry.status,
+        watched_episodes: entry.watched_episodes,
+        mal_id: entry.mal_id
+      };
+
+      // Check if we have a cached airing time within our range [startUnix, endUnix]
+      const airTimes = [
+        { type: "raw", time: meta.raw_air_at ? Number(meta.raw_air_at) : null, ep: meta.raw_next_episode_number },
+        { type: "sub", time: meta.sub_air_at ? Number(meta.sub_air_at) : null, ep: meta.sub_next_episode_number },
+        { type: "dub", time: meta.dub_air_at ? Number(meta.dub_air_at) : null, ep: meta.dub_next_episode_number },
+      ];
+
+      const activeAiring = airTimes.find(t => t.time && t.time >= startUnix && t.time <= endUnix);
+
+      if (activeAiring) {
+        resolvedSchedules.push({
+          mal_id: entry.mal_id,
+          anilist_id: anilistId,
+          title: meta.title_romaji || meta.title_english || entry.title || "",
+          title_english: meta.title_english,
+          title_romaji: meta.title_romaji,
+          poster_url: meta.poster_url || entry.poster_url || "",
+          format: meta.type || "Unknown",
+          airingAt: activeAiring.time,
+          episode: activeAiring.ep,
+          total_episodes: meta.total_episodes,
           status: entry.status,
           watched_episodes: entry.watched_episodes,
-          mal_id: entry.mal_id
-        };
+        });
+      } else {
+        fallbackAnilistIds.push(anilistId);
       }
     });
 
-    if (anilistIds.length === 0) {
-      return NextResponse.json({ chunks: [], userEntriesMap: {} });
-    }
-
-    // Chunk the AniList IDs into groups of 50 to naturally handle pagination limits safely
+    // Chunk the remaining AniList IDs into groups of 50 to naturally handle pagination limits safely
     const CHUNK_SIZE = 50;
     const chunks: any[] = [];
     
-    for (let i = 0; i < anilistIds.length; i += CHUNK_SIZE) {
-      const chunkIds = anilistIds.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < fallbackAnilistIds.length; i += CHUNK_SIZE) {
+      const chunkIds = fallbackAnilistIds.slice(i, i + CHUNK_SIZE);
       chunks.push({
         query: `
           query($start: Int, $end: Int, $ids: [Int]) {
@@ -130,10 +169,11 @@ export async function GET(req: Request) {
       });
     }
 
-    console.log(`[CALENDAR API] Prepared ${chunks.length} payload requests for client-side execution.`);
+    console.log(`[CALENDAR API] Resolved ${resolvedSchedules.length} from database. Prepared ${chunks.length} fallback payload requests for client-side execution.`);
     return NextResponse.json({ 
       isWeek,
       mondayUtcStr: mondayUtc.toISOString(),
+      resolvedSchedules,
       chunks, 
       userEntriesMap 
     });

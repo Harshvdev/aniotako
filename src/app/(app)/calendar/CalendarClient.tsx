@@ -121,49 +121,50 @@ export default function CalendarClient() {
         }
         
         const json = await res.json();
+        const resolvedSchedules = json.resolvedSchedules || [];
         const chunks = json.chunks || [];
         const userEntriesMap = json.userEntriesMap || {};
 
-        if (chunks.length === 0) {
-          setAnimeList([]);
-          return;
+        // Fetch AniList GraphQL data client-side in parallel only if chunks exist
+        let fetchedSchedules: CalendarEntry[] = [];
+        if (chunks.length > 0) {
+          const results = await Promise.all(chunks.map(fetchChunk));
+          const allSchedules: any[] = [];
+          
+          results.forEach((r: any) => {
+            const schedules = r.data?.Page?.airingSchedules || [];
+            allSchedules.push(...schedules);
+          });
+
+          // Map and merge with user watchlist info
+          allSchedules.forEach((sched: any) => {
+            const media = sched.media;
+            if (!media) return;
+            const userEntry = userEntriesMap[media.id];
+            if (!userEntry) return;
+
+            fetchedSchedules.push({
+              mal_id: media.idMal || userEntry.mal_id,
+              anilist_id: media.id,
+              title: media.title.romaji || media.title.english || "",
+              title_english: media.title.english,
+              title_romaji: media.title.romaji,
+              poster_url: media.coverImage?.large || "",
+              format: media.format || "Unknown",
+              airingAt: sched.airingAt,
+              episode: sched.episode,
+              total_episodes: media.episodes,
+              status: userEntry.status,
+              watched_episodes: userEntry.watched_episodes,
+            });
+          });
         }
 
-        // Fetch AniList GraphQL data client-side in parallel
-        const results = await Promise.all(chunks.map(fetchChunk));
-        const allSchedules: any[] = [];
-        
-        results.forEach((r: any) => {
-          const schedules = r.data?.Page?.airingSchedules || [];
-          allSchedules.push(...schedules);
-        });
-
-        // Map and merge with user watchlist info
-        const mappedData: CalendarEntry[] = [];
-        allSchedules.forEach((sched: any) => {
-          const media = sched.media;
-          if (!media) return;
-          const userEntry = userEntriesMap[media.id];
-          if (!userEntry) return;
-
-          mappedData.push({
-            mal_id: media.idMal || userEntry.mal_id,
-            anilist_id: media.id,
-            title: media.title.romaji || media.title.english || "",
-            title_english: media.title.english,
-            title_romaji: media.title.romaji,
-            poster_url: media.coverImage?.large || "",
-            format: media.format || "Unknown",
-            airingAt: sched.airingAt,
-            episode: sched.episode,
-            total_episodes: media.episodes,
-            status: userEntry.status,
-            watched_episodes: userEntry.watched_episodes,
-          });
-        });
+        // Combine resolved (from DB cache) and fetched (from AniList) schedules
+        const combinedData = [...resolvedSchedules, ...fetchedSchedules];
 
         // Sort ascending by default (early airers first)
-        const sortedData = mappedData.sort((a: CalendarEntry, b: CalendarEntry) => {
+        const sortedData = combinedData.sort((a: CalendarEntry, b: CalendarEntry) => {
           if (a.airingAt && b.airingAt) return a.airingAt - b.airingAt;
           if (a.airingAt) return -1;
           if (b.airingAt) return 1;
@@ -204,23 +205,28 @@ export default function CalendarClient() {
           const res = await fetch(`/api/calendar?date=${mondayStr}&week=true`);
           if (res.ok) {
             const json = await res.json();
+            const resolvedSchedules = json.resolvedSchedules || [];
             const chunks = json.chunks || [];
             
-            if (chunks.length === 0) {
-              setDots({});
-              return;
-            }
-
-            const results = await Promise.all(chunks.map(fetchChunk));
             const newDots: Record<string, boolean> = {};
-            
-            results.forEach((r: any) => {
-              const schedules = r.data?.Page?.airingSchedules || [];
-              schedules.forEach((sched: any) => {
-                const dateStr = getDateStringInTz(sched.airingAt, userTz);
-                newDots[dateStr] = true;
-              });
+
+            // 1. Add dots from database-resolved schedules
+            resolvedSchedules.forEach((sched: any) => {
+              const dateStr = getDateStringInTz(sched.airingAt, userTz);
+              newDots[dateStr] = true;
             });
+
+            // 2. Add dots from AniList fallback chunks (if any)
+            if (chunks.length > 0) {
+              const results = await Promise.all(chunks.map(fetchChunk));
+              results.forEach((r: any) => {
+                const schedules = r.data?.Page?.airingSchedules || [];
+                schedules.forEach((sched: any) => {
+                  const dateStr = getDateStringInTz(sched.airingAt, userTz);
+                  newDots[dateStr] = true;
+                });
+              });
+            }
 
             setDots(prev => ({ ...prev, ...newDots }));
           }

@@ -35,7 +35,7 @@ const normalizeText = (value: unknown): string =>
   String(value ?? "")
     .toLowerCase()
     .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
 
@@ -141,7 +141,6 @@ const extractShowTitles = (show: any): string[] => {
     show?.anime?.title?.romaji,
     show?.anime?.title?.english,
     show?.anime?.title?.native,
-    ...getDeepStrings(show), // Restored multi-property text scanning alignment
   ];
 
   return Array.from(
@@ -207,7 +206,8 @@ export async function GET(req: NextRequest) {
         title_english,
         title_romaji,
         title_native,
-        anilist_raw
+        anilist_raw,
+        airing_status
       `)
       .not("anilist_id", "is", null)
       .limit(10000);
@@ -237,6 +237,12 @@ export async function GET(req: NextRequest) {
     };
 
     watchedRows?.forEach((row: any) => {
+      // Ignore finished shows to prevent airing schedule mapping collisions
+      const status = (row.airing_status || "").toUpperCase();
+      if (status === "FINISHED" || status === "FINISHED AIRING" || status === "CANCELLED") {
+        return;
+      }
+
       const anilistId = Number(row.anilist_id);
       const malId = row.mal_id ? Number(row.mal_id) : null;
 
@@ -249,14 +255,7 @@ export async function GET(req: NextRequest) {
         addWatchedTitle(row.title_romaji, anilistId);
         addWatchedTitle(row.title_native, anilistId);
 
-        // Restored deep raw text scanning mapping profile targets from File 1
-        const rawTitles = getDeepStrings(row.anilist_raw);
-        for (const t of rawTitles) {
-          const norm = normalizeText(t);
-          if (norm.length >= 3 && norm.length <= 120 && !norm.includes("http") && !/^\d+$/.test(norm)) {
-            titleToAnilistIdMap.set(norm, anilistId);
-          }
-        }
+
       }
     });
 

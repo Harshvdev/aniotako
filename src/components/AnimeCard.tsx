@@ -128,6 +128,7 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
               src={anime.poster_url} 
               alt={anime.title} 
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
             />
           ) : (
             <div className="flex flex-col items-center justify-center w-full h-full text-zinc-600">

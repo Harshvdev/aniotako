@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AnimeCard from "@/components/AnimeCard";
@@ -38,6 +38,8 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
   
   const [filteredList, setFilteredList] = useState<WatchlistEntry[]>(initialWatchlist);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(30);
+  const observerTarget = useRef<HTMLDivElement | null>(null);
 
   const handleRemove = async (id: string) => {
     try {
@@ -49,6 +51,36 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
       alert("Failed to remove anime. Please try again.");
     }
   };
+
+  // Reset visible items count whenever the filtered list changes
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [filteredList]);
+
+  // IntersectionObserver for lazy loading more items on scroll
+  useEffect(() => {
+    if (filteredList.length <= visibleCount) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + 30, filteredList.length));
+        }
+      },
+      { threshold: 0.1, rootMargin: "150px" }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [filteredList, visibleCount]);
 
   if (!isLoggedIn) {
     return (
@@ -112,15 +144,27 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
           No anime found matching these filters.
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5">
-          {filteredList.map((anime) => (
-            <AnimeCard 
-              key={anime.id} 
-              entry={anime} 
-              onRemove={handleRemove} 
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5">
+            {filteredList.slice(0, visibleCount).map((anime) => (
+              <AnimeCard 
+                key={anime.id} 
+                entry={anime} 
+                onRemove={handleRemove} 
+              />
+            ))}
+          </div>
+          
+          {filteredList.length > visibleCount && (
+            <div 
+              ref={observerTarget} 
+              className="mt-12 py-8 text-center text-xs text-zinc-500 font-bold tracking-widest uppercase flex items-center justify-center gap-2"
+            >
+              <div className="w-4 h-4 rounded-full border-2 border-zinc-700 border-t-cyan-500 animate-spin" />
+              Loading more anime...
+            </div>
+          )}
+        </>
       )}
 
       {/* Floating Add Button */}

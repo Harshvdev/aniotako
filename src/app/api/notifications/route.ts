@@ -11,9 +11,16 @@ export async function GET(req: Request) {
     const unreadOnly = searchParams.get("unread") === "true";
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
+    // Start fetching the true unread count in parallel
+    const unreadCountPromise = supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
+
     let query = supabase
       .from("notifications")
-      .select("*", { count: "exact" })
+      .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -22,11 +29,16 @@ export async function GET(req: Request) {
       query = query.eq("is_read", false);
     }
 
-    const { data, count, error } = await query;
+    const { data, error } = await query;
     if (error) throw error;
 
+    const { count: trueUnreadCount, error: countError } = await unreadCountPromise;
+    if (countError) throw countError;
+
+    const totalUnreadCount = trueUnreadCount || 0;
+
     if (!data || data.length === 0) {
-      return NextResponse.json({ notifications: [], unreadCount: 0 });
+      return NextResponse.json({ notifications: [], unreadCount: totalUnreadCount });
     }
 
     // THE FIX: Fetch bilingual titles from anime_metadata to support user preferences
@@ -48,7 +60,7 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ notifications: enrichedNotifications, unreadCount: count || 0 });
+    return NextResponse.json({ notifications: enrichedNotifications, unreadCount: totalUnreadCount });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

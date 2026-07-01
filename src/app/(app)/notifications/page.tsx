@@ -93,5 +93,25 @@ export default async function NotificationsPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  return <NotificationsClient initialNotifications={notifications || []} />;
+  let enrichedNotifications = notifications || [];
+  if (notifications && notifications.length > 0) {
+    const malIds = notifications.map(n => n.mal_id);
+    const { data: metaData } = await supabase
+      .from("anime_metadata")
+      .select("mal_id, title_english, title_romaji")
+      .in("mal_id", malIds);
+
+    enrichedNotifications = notifications.map(notif => {
+      const meta = metaData?.find(m => m.mal_id === notif.mal_id);
+      return {
+        ...notif,
+        anime_metadata: meta ? {
+          title_english: meta.title_english,
+          title_romaji: meta.title_romaji
+        } : undefined
+      };
+    }) as any[];
+  }
+
+  return <NotificationsClient initialNotifications={enrichedNotifications} />;
 }

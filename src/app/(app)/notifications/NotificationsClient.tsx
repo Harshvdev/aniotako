@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 
 interface Notification {
   id: string;
@@ -13,6 +14,10 @@ interface Notification {
   created_at: string;
   aired_at: string | null;
   delivered_at: string | null;
+  anime_metadata?: {
+    title_english?: string | null;
+    title_romaji?: string | null;
+  };
 }
 
 interface Props {
@@ -50,6 +55,7 @@ function formatAbsoluteTime(dateString: string) {
 export default function NotificationsClient({ initialNotifications }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const router = useRouter();
+  const { getTitle } = useTitleLanguage();
 
   // --- Grouping Logic ---
   const groupedNotifications = () => {
@@ -178,7 +184,11 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                       <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <h3 className={`text-base truncate ${!notif.is_read ? "font-bold text-white" : "font-medium text-zinc-300 group-hover:text-white transition-colors"}`}>
-                            {notif.anime_title}
+                            {getTitle({
+                              title: notif.anime_title,
+                              title_english: notif.anime_metadata?.title_english,
+                              title_romaji: notif.anime_metadata?.title_romaji
+                            })}
                           </h3>
                           {/* Display localized exact air and dispatch times */}
                           <p className="text-sm text-zinc-400 mt-0.5">

@@ -189,21 +189,49 @@ async function handler(req: Request) {
     const eventId = eventRecord.id;
 
     // --- Step 4: Find Users and Notify ---
-    // Join watchlist table across explicit relational format preferences
-    const { data: usersToNotify, error: userQueryError } = await supabaseAdmin
+    // Fetch all users watching this anime
+    const { data: watchlistUsers, error: watchlistError } = await supabaseAdmin
       .from("watchlist_entries")
-      .select(`
-        user_id, 
-        title, 
-        title_english,
-        user_preferences!inner(notification_format, timezone)
-      `)
+      .select("user_id, title, title_english")
       .eq("mal_id", mal_id)
-      .eq("status", "watching")
-      .eq("user_preferences.notification_format", format);
+      .eq("status", "watching");
 
-    if (userQueryError) throw userQueryError;
-    if (!usersToNotify || usersToNotify.length === 0) {
+    if (watchlistError) throw watchlistError;
+    if (!watchlistUsers || watchlistUsers.length === 0) {
+      return NextResponse.json({ ok: true, status: "No users watching active preference format target." }, { status: 200 });
+    }
+
+    const userIds = watchlistUsers.map((w) => w.user_id);
+
+    // Fetch user preferences for these users matching the notification format
+    const { data: preferences, error: prefError } = await supabaseAdmin
+      .from("user_preferences")
+      .select("user_id, notification_format, timezone")
+      .in("user_id", userIds)
+      .eq("notification_format", format);
+
+    if (prefError) throw prefError;
+    if (!preferences || preferences.length === 0) {
+      return NextResponse.json({ ok: true, status: "No users watching active preference format target." }, { status: 200 });
+    }
+
+    // Map watchlist entries with preferences in memory
+    const usersToNotify = watchlistUsers
+      .filter((w) => preferences.some((p) => p.user_id === w.user_id))
+      .map((w) => {
+        const pref = preferences.find((p) => p.user_id === w.user_id);
+        return {
+          user_id: w.user_id,
+          title: w.title,
+          title_english: w.title_english,
+          user_preferences: {
+            notification_format: pref?.notification_format,
+            timezone: pref?.timezone,
+          },
+        };
+      });
+
+    if (usersToNotify.length === 0) {
       return NextResponse.json({ ok: true, status: "No users watching active preference format target." }, { status: 200 });
     }
 
@@ -304,8 +332,12 @@ async function handler(req: Request) {
     }
 
     // Execute database operations and background workers concurrently
+    const dbPromise = internalNotificationsToInsert.length > 0
+      ? supabaseAdmin.from("notifications").insert(internalNotificationsToInsert)
+      : Promise.resolve({ data: null, error: null });
+
     await Promise.all([
-      supabaseAdmin.from("notifications").insert(internalNotificationsToInsert),
+      dbPromise,
       Promise.allSettled(pushPromises),
     ]);
 

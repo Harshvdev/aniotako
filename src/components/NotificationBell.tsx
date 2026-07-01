@@ -61,7 +61,7 @@ export default function NotificationBell() {
         if (res.ok) {
           const data = await res.json();
           setNotifications(data.notifications || []);
-          setUnreadCount(data.notifications?.filter((n: Notification) => !n.is_read).length || 0);
+          setUnreadCount(data.unreadCount ?? 0);
         }
       } catch (err) {
         console.error("Failed to fetch notifications", err);

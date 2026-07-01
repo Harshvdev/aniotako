@@ -12,30 +12,59 @@ export default async function WatchlistPage() {
     return <WatchlistClient initialWatchlist={[]} isLoggedIn={false} />;
   }
 
-  // 1. Fetch user's core watchlist entries
-  const { data: entries } = await supabase
+  // Fetch user's watchlist entries joined with metadata in a single query
+  const { data: entries, error } = await supabase
     .from("watchlist_entries")
-    .select("*")
+    .select(`
+      id,
+      user_id,
+      mal_id,
+      title,
+      status,
+      score,
+      watched_episodes,
+      total_episodes,
+      poster_url,
+      created_at,
+      title_english,
+      title_romaji,
+      anime_metadata (
+        genres,
+        year,
+        type,
+        season,
+        airing_status,
+        title_english,
+        title_romaji
+      )
+    `)
     .eq("user_id", user.id);
+
+  if (error) {
+    console.error("[WATCHLIST PAGE] Supabase Fetch Error:", error.message);
+  }
 
   if (!entries || entries.length === 0) {
     return <WatchlistClient initialWatchlist={[]} />;
   }
 
-  // 2. Fetch metadata for only the anime in this user's list
-  const malIds = entries.map(e => e.mal_id);
-  const { data: metadata } = await supabase
-    .from("anime_metadata")
-    // ADDED: airing_status to the select query
-    .select("mal_id, genres, year, type, season, airing_status, title_english, title_romaji") 
-    .in("mal_id", malIds);
+  // Merge watchlist fields and map the joined relation object
+  const mergedEntries = entries.map((entry: any) => {
+    // Supabase can return relation as a single object or a 1-item array depending on structural parsing
+    const meta = Array.isArray(entry.anime_metadata) 
+      ? entry.anime_metadata[0] 
+      : entry.anime_metadata;
 
-  // 3. Merge them together
-  const mergedEntries = entries.map(entry => {
-    const meta = metadata?.find(m => m.mal_id === entry.mal_id);
     return {
-      ...entry,
-      // THE FIX: Fallback to the metadata titles if the watchlist entry is missing them
+      id: entry.id,
+      mal_id: entry.mal_id,
+      title: entry.title,
+      status: entry.status,
+      score: entry.score,
+      watched_episodes: entry.watched_episodes,
+      total_episodes: entry.total_episodes,
+      poster_url: entry.poster_url,
+      created_at: entry.created_at,
       title_english: entry.title_english || meta?.title_english || null,
       title_romaji: entry.title_romaji || meta?.title_romaji || entry.title,
       anime_metadata: meta ? {
@@ -43,7 +72,7 @@ export default async function WatchlistPage() {
         year: meta.year || null,
         type: meta.type || null,
         season: meta.season || null,
-        airing_status: meta.airing_status || null, // ADDED THIS
+        airing_status: meta.airing_status || null,
       } : undefined
     };
   });

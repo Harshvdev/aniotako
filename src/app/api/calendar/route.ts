@@ -70,7 +70,8 @@ export async function GET(req: Request) {
           dub_air_at,
           raw_next_episode_number,
           sub_next_episode_number,
-          dub_next_episode_number
+          dub_next_episode_number,
+          airing_status
         )
       `)
       .eq("user_id", user.id);
@@ -132,7 +133,12 @@ export async function GET(req: Request) {
           watched_episodes: entry.watched_episodes,
         });
       } else {
-        fallbackAnilistIds.push(anilistId);
+        // Fallback: If not cached for this week, we only query AniList if the show is NOT finished
+        const status = (meta.airing_status || "").toUpperCase();
+        const isFinished = status === "FINISHED" || status === "FINISHED AIRING" || status === "CANCELLED";
+        if (!isFinished) {
+          fallbackAnilistIds.push(anilistId);
+        }
       }
     });
 

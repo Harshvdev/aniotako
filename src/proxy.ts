@@ -112,6 +112,7 @@ export async function proxy(request: NextRequest) {
 
   // Forward user headers to downstream pages/routes
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-auth-checked", "true");
   if (user) {
     requestHeaders.set("x-user-id", (user as any).id);
     requestHeaders.set("x-user-email", (user as any).email || "");

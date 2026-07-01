@@ -42,10 +42,14 @@ export const getCachedUser = cache(async () => {
 export async function getServerUser() {
   try {
     const headersList = await headers();
-    const userId = headersList.get("x-user-id");
-    const email = headersList.get("x-user-email");
-    if (userId) {
-      return { id: userId, email: email || null } as any;
+    const authChecked = headersList.get("x-auth-checked");
+    if (authChecked === "true") {
+      const userId = headersList.get("x-user-id");
+      const email = headersList.get("x-user-email");
+      if (userId) {
+        return { id: userId, email: email || null } as any;
+      }
+      return null; // Checked by middleware, user is verified as guest!
     }
   } catch (error) {
     // Silently ignore errors from headers() outside request contexts (e.g. static build compile)
@@ -63,10 +67,14 @@ export async function getServerUser() {
 
 export async function getAuthUser(req?: Request) {
   if (req) {
-    const userId = req.headers.get("x-user-id");
-    const email = req.headers.get("x-user-email");
-    if (userId) {
-      return { id: userId, email: email || null };
+    const authChecked = req.headers.get("x-auth-checked");
+    if (authChecked === "true") {
+      const userId = req.headers.get("x-user-id");
+      const email = req.headers.get("x-user-email");
+      if (userId) {
+        return { id: userId, email: email || null };
+      }
+      return null; // Checked by middleware, user is verified as guest!
     }
   }
 

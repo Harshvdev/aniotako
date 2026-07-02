@@ -26,7 +26,7 @@ export default async function ProfilePage() {
     { data: profile },
     { data: entries }
   ] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
+    supabase.from("profiles").select("display_name, created_at").eq("id", user.id).single(),
     supabase.from("watchlist_entries").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
   ]);
 
@@ -99,7 +99,10 @@ export default async function ProfilePage() {
   });
 
   const displayName = profile?.display_name || user.email?.split("@")[0] || "Otaku";
-  const memberSince = new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const rawDate = profile?.created_at || user.created_at;
+  const memberSince = rawDate && !isNaN(Date.parse(rawDate))
+    ? new Date(rawDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "Recent";
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 pb-24">

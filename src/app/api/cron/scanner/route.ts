@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "@upstash/qstash";
+import { getSiteUrl } from "@/lib/get-site-url";
 
 // Initialize Clients using Server-Side Environment Variables
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,7 +12,10 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+const qstash = new Client({ 
+  token: process.env.QSTASH_TOKEN!,
+  ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
+});
 
 // Batching Constants for Performance Optimization
 const DB_BATCH_SIZE = 100;
@@ -159,6 +163,8 @@ export async function GET(req: NextRequest) {
     if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    const siteUrl = getSiteUrl(req);
 
     const now = new Date();
     const windowStartUnix = Math.floor((now.getTime() - 5 * 60 * 1000) / 1000);
@@ -429,7 +435,7 @@ export async function GET(req: NextRequest) {
 
           candidateQStashMessages.push({
             eventKey, 
-            url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/notify`,
+            url: `${siteUrl}/api/notify`,
             body: {
               anilist_id: anilistId,
               mal_id: malId,

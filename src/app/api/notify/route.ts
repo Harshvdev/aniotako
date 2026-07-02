@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { Client } from "@upstash/qstash";
 import webpush from "web-push";
+import { getSiteUrl } from "@/lib/get-site-url";
 
 // Initialize Web Push using environment variables
 webpush.setVapidDetails(
@@ -12,7 +13,10 @@ webpush.setVapidDetails(
 );
 
 // Initialize Upstash QStash client
-const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+const qstash = new Client({ 
+  token: process.env.QSTASH_TOKEN!,
+  ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
+});
 
 // Helper to compute ISO Week and Year matching the scheduling engine properties
 function getISOWeekAndYear(date: Date) {
@@ -30,6 +34,7 @@ function getISOWeekAndYear(date: Date) {
 
 async function handler(req: Request) {
   try {
+    const siteUrl = getSiteUrl(req);
     // --- Step 1: Parse Payload from Scanner ---
     const { 
       anilist_id, 
@@ -151,7 +156,7 @@ async function handler(req: Request) {
     if (differenceInSeconds > 600 && liveUnix > nowUnix) {
       // Re-queue the exact message structure to QStash aligned with the updated timeline
       await qstash.publishJSON({
-        url: process.env.NEXT_PUBLIC_SITE_URL + "/api/notify",
+        url: siteUrl + "/api/notify",
         body: { 
           anilist_id, 
           mal_id, 

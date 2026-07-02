@@ -49,6 +49,7 @@ export default function SearchBox({
 
       {onFilterClick && (
         <button
+          type="button"
           onClick={onFilterClick}
           className={`flex items-center justify-center gap-2 px-5 rounded-2xl border transition-all shadow-lg text-xs font-bold uppercase tracking-wider shrink-0 ${
             isFilterActive

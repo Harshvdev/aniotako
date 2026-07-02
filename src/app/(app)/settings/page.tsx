@@ -583,21 +583,47 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* --- DATA & BACKUP SECTION --- */}
+      <section className="mb-12">
+        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Data & Backup</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex-1">
+              <h3 className="text-white font-bold text-sm sm:text-base">Export Watchlist</h3>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Backup your watchlist data. Supports standard JSON, clean CSV for spreadsheets, or MyAnimeList-compatible XML.</p>
+            </div>
+            <div className="flex flex-wrap gap-2.5 shrink-0">
+              <button 
+                onClick={() => window.location.href = '/api/export?format=json'} 
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 hover:text-cyan-400 text-zinc-100 font-bold text-xs sm:text-sm rounded-xl transition-all border border-zinc-700 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                JSON
+              </button>
+              <button 
+                onClick={() => window.location.href = '/api/export?format=csv'} 
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 hover:text-emerald-400 text-zinc-100 font-bold text-xs sm:text-sm rounded-xl transition-all border border-zinc-700 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                CSV
+              </button>
+              <button 
+                onClick={() => window.location.href = '/api/export?format=xml'} 
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 hover:text-amber-400 text-zinc-100 font-bold text-xs sm:text-sm rounded-xl transition-all border border-zinc-700 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                MAL XML
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* --- DANGER ZONE --- */}
       <section>
         <h2 className="text-xs font-bold text-red-500 uppercase tracking-widest mb-4">Danger Zone</h2>
         <div className="bg-zinc-900 border border-red-900/30 rounded-2xl p-6 space-y-6 shadow-lg">
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
-            <div>
-              <h3 className="text-white font-bold">Export Watchlist</h3>
-              <p className="text-sm text-zinc-400 mt-1">Download all your data as a JSON file.</p>
-            </div>
-            <button onClick={() => window.location.href = '/api/export'} className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-colors border border-zinc-700">
-              Download JSON
-            </button>
-          </div>
-
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-zinc-800">
             <div className="flex-1">
               <h3 className="text-white font-bold">Delete All Entries</h3>

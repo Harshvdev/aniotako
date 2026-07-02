@@ -107,10 +107,12 @@ export default function SettingsPage() {
       // Load Push Status
       if ("Notification" in window && "serviceWorker" in navigator) {
         setPushPermission(Notification.permission);
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration) {
+        try {
+          const registration = await navigator.serviceWorker.register("/sw.js");
           const sub = await registration.pushManager.getSubscription();
           setIsSubscribed(!!sub);
+        } catch (err) {
+          console.error("Service worker registration failed on mount:", err);
         }
       }
 
@@ -237,12 +239,20 @@ export default function SettingsPage() {
     setIsPushLoading(true);
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
       
       if (isSubscribed) {
         const sub = await registration.pushManager.getSubscription();
-        if (sub) await sub.unsubscribe();
-        await fetch("/api/push/unsubscribe", { method: "POST" });
+        if (sub) {
+          const endpoint = sub.endpoint;
+          await sub.unsubscribe();
+          await fetch("/api/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint })
+          });
+        }
         setIsSubscribed(false);
         showToast("Push notifications disabled.");
       } else {
@@ -255,9 +265,15 @@ export default function SettingsPage() {
           applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
         });
 
-        await fetch("/api/push/subscribe", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub)
+        const res = await fetch("/api/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sub)
         });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to save subscription on server");
+        }
         setIsSubscribed(true);
         showToast("Push notifications enabled!");
       }
@@ -389,13 +405,16 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 py-6">
+          <div className="flex items-center justify-between gap-4 py-6 opacity-60">
             <div className="flex-1 min-w-0 pr-2">
-              <h3 className="text-white font-bold text-sm sm:text-base">Email Notifications</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-white font-bold text-sm sm:text-base">Email Notifications</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-zinc-800 text-zinc-400 rounded-full border border-zinc-700">Coming Soon</span>
+              </div>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">Receive a weekly digest of airings.</p>
             </div>
             <div className="shrink-0">
-              <ToggleSwitch checked={emailNotify} onChange={(val) => handleUpdatePref("email_notifications", val)} />
+              <ToggleSwitch checked={false} onChange={() => {}} disabled />
             </div>
           </div>
 
@@ -629,11 +648,16 @@ export default function SettingsPage() {
   );
 }
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (val: boolean) => void }) {
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (val: boolean) => void; disabled?: boolean }) {
   return (
     <button 
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${checked ? 'bg-cyan-500' : 'bg-zinc-700'}`}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+        disabled 
+          ? 'bg-zinc-800 cursor-not-allowed opacity-50' 
+          : checked ? 'bg-cyan-500' : 'bg-zinc-700'
+      }`}
     >
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>

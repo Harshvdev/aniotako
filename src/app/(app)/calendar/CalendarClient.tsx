@@ -19,7 +19,69 @@ interface CalendarEntry {
   watched_episodes: number;
   title_english?: string | null;
   title_romaji?: string | null;
+  airing_status?: string | null;
 }
+
+interface AiringStatusStyle {
+  text: string;
+  textColor: string;
+  dotColor: string;
+  bgColor: string;
+  borderColor: string;
+}
+
+const getAiringStatusStyle = (anime: CalendarEntry): AiringStatusStyle => {
+  const status = (anime.airing_status || "").toUpperCase();
+  const isPast = anime.airingAt ? (anime.airingAt * 1000 < Date.now()) : false;
+
+  if (status === "CANCELLED") {
+    return {
+      text: "Cancelled",
+      textColor: "text-red-500",
+      dotColor: "bg-red-500",
+      bgColor: "bg-red-500/10",
+      borderColor: "border-red-500/20"
+    };
+  }
+
+  if (status === "HIATUS" || status === "DELAYED" || status === "POSTPONED") {
+    return {
+      text: "Delayed",
+      textColor: "text-amber-500",
+      dotColor: "bg-amber-500",
+      bgColor: "bg-amber-500/10",
+      borderColor: "border-amber-500/20"
+    };
+  }
+
+  if (isPast) {
+    return {
+      text: "Aired",
+      textColor: "text-green-500",
+      dotColor: "bg-green-500",
+      bgColor: "bg-green-500/10",
+      borderColor: "border-green-500/20"
+    };
+  }
+
+  if (anime.airingAt) {
+    return {
+      text: "Upcoming",
+      textColor: "text-blue-500",
+      dotColor: "bg-blue-500",
+      bgColor: "bg-blue-500/10",
+      borderColor: "border-blue-500/20"
+    };
+  }
+
+  return {
+    text: "TBA",
+    textColor: "text-zinc-500",
+    dotColor: "bg-zinc-500",
+    bgColor: "bg-zinc-500/10",
+    borderColor: "border-zinc-500/20"
+  };
+};
 
 const formatStatus = (status: string) => status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 const getStatusColor = (status: string) => {
@@ -156,6 +218,7 @@ export default function CalendarClient() {
               total_episodes: media.episodes,
               status: userEntry.status,
               watched_episodes: userEntry.watched_episodes,
+              airing_status: media.status || null,
             });
           });
         }
@@ -260,6 +323,34 @@ export default function CalendarClient() {
     });
   };
 
+  const getWeekRangeString = () => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    if (!y || !m || !d) return "";
+    
+    const curr = new Date(y, m - 1, d);
+    const dayOfWeek = curr.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    
+    const monday = new Date(curr);
+    monday.setDate(curr.getDate() + diffToMonday);
+    
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    const monMonth = monday.toLocaleDateString('en-US', { month: 'long' });
+    const sunMonth = sunday.toLocaleDateString('en-US', { month: 'long' });
+    const monYear = monday.getFullYear();
+    const sunYear = sunday.getFullYear();
+    
+    if (monYear !== sunYear) {
+      return `${monMonth} ${monday.getDate()}, ${monYear} – ${sunMonth} ${sunday.getDate()}, ${sunYear}`;
+    }
+    if (monMonth !== sunMonth) {
+      return `${monMonth} ${monday.getDate()} – ${sunMonth} ${sunday.getDate()}, ${monYear}`;
+    }
+    return `${monMonth} ${monday.getDate()} – ${sunday.getDate()}, ${monYear}`;
+  };
+
   const stripDays = buildStripDays();
 
   return (
@@ -268,7 +359,7 @@ export default function CalendarClient() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-white tracking-tight">Weekly Schedule</h1>
-          <p className="text-sm text-zinc-400 mt-1">Current airing times for your watchlist.</p>
+          <p className="text-sm font-semibold text-cyan-400 mt-1">{getWeekRangeString()}</p>
         </div>
         
         <div className="relative">
@@ -342,27 +433,42 @@ export default function CalendarClient() {
               <img src={anime.poster_url} alt={anime.title} className="w-16 h-24 sm:w-20 sm:h-28 object-cover rounded-xl bg-zinc-800 shrink-0" />
               
               <div className="flex-1 min-w-0 py-1">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border ${getStatusColor(anime.status)}`}>
+                <div className="flex items-center gap-2 mb-1.5 font-bold text-[9px] uppercase tracking-widest">
+                  <span className={`px-2 py-0.5 rounded border ${getStatusColor(anime.status)}`}>
                     {formatStatus(anime.status)}
                   </span>
-                  <span className="bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest">
+                  <span className="bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
                     {anime.format}
                   </span>
+                  {(() => {
+                    const style = getAiringStatusStyle(anime);
+                    return (
+                      <span className={`px-2 py-0.5 rounded border ${style.bgColor} ${style.textColor} ${style.borderColor}`}>
+                        {style.text}
+                      </span>
+                    );
+                  })()}
                 </div>   
                 <h3 className="font-bold text-white text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors">
                   {getTitle(anime)}
                 </h3>
                 
                 <div className="flex flex-col mt-2 gap-1">
-                  <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    {anime.airingAt && anime.episode ? (
-                      <span className="truncate">Episode {anime.episode} &middot; Airs at {formatTimeOnly(anime.airingAt)}</span>
-                    ) : (
-                      <span className="truncate">Broadcast: {anime.time}</span>
-                    )}
-                  </span>
+                  {(() => {
+                    const style = getAiringStatusStyle(anime);
+                    return (
+                      <span className={`text-xs font-medium ${style.textColor} flex items-center gap-1.5`}>
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        {anime.airingAt && anime.episode ? (
+                          <span className="truncate">
+                            Episode {anime.episode} &middot; {style.text === "Aired" ? "Aired at" : "Airing at"} {formatTimeOnly(anime.airingAt)}
+                          </span>
+                        ) : (
+                          <span className="truncate">Broadcast: {anime.time || "TBA"}</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                   <span className="text-[10px] sm:text-xs text-zinc-500 font-medium">
                     Your Progress: <span className="font-mono font-bold text-zinc-300">{anime.watched_episodes}</span> <span className="opacity-50">/ {anime.total_episodes || '?'}</span>
                   </span>

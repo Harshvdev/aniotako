@@ -131,6 +131,7 @@ export async function GET(req: Request) {
           total_episodes: meta.total_episodes,
           status: entry.status,
           watched_episodes: entry.watched_episodes,
+          airing_status: meta.airing_status || null,
         });
       } else {
         // Fallback: If not cached for this week, we only query AniList if the show is NOT finished

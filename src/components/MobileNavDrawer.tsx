@@ -41,7 +41,9 @@ export default function MobileNavDrawer() {
             </div>
 
             <div className="flex flex-col p-4 gap-2 overflow-y-auto custom-scrollbar">
+              <Link href="/" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Home</Link>
               <Link href="/watchlist" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Watchlist</Link>
+              <Link href="/search" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Search</Link>
               <Link href="/calendar" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-cyan-400 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Calendar</Link>
               <Link href="/import" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Import</Link>
               <Link href="/notifications" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Notifications</Link>

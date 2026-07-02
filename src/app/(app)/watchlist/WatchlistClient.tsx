@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AnimeCard from "@/components/AnimeCard";
-import AddAnimeSearch from "@/components/AddAnimeSearch";
 import WatchlistFilter from "@/components/WatchlistFilter";
 
 export interface WatchlistEntry {
@@ -37,7 +36,6 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
   const router = useRouter();
   
   const [filteredList, setFilteredList] = useState<WatchlistEntry[]>(initialWatchlist);
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
   const observerTarget = useRef<HTMLDivElement | null>(null);
 
@@ -113,10 +111,18 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
           </div>
         </div>
 
-        {/* Search Box */}
-        <div className="max-w-2xl mx-auto">
-          <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 text-center">Search & Explore Anime</h3>
-          <AddAnimeSearch />
+        {/* Search Box Link */}
+        <div className="max-w-2xl mx-auto text-center">
+          <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Search & Explore Anime</h3>
+          <Link 
+            href="/search"
+            className="inline-flex items-center justify-center gap-2.5 w-full max-w-md bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded-2xl py-3 px-6 text-zinc-400 font-semibold transition-all shadow-lg hover:text-white"
+          >
+            <svg className="w-5 h-5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Search Anime Catalog...
+          </Link>
         </div>
       </div>
     );
@@ -169,29 +175,13 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
 
       {/* Floating Add Button */}
       <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-50">
-        <button
-          onClick={() => setIsSearchModalOpen(true)}
+        <Link
+          href="/search"
           className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.4)] hover:scale-110 active:scale-95 transition-all"
         >
           <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-        </button>
+        </Link>
       </div>
-
-      {/* Search Modal */}
-      {isSearchModalOpen && (
-        <div className="fixed inset-0 z-[120] flex items-start justify-center pt-20 sm:pt-24 px-4 bg-black/80 backdrop-blur-sm">
-          <div className="absolute inset-0" onClick={() => setIsSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl bg-transparent">
-            <AddAnimeSearch />
-            <button 
-              onClick={() => setIsSearchModalOpen(false)}
-              className="absolute -top-12 right-0 text-zinc-400 hover:text-white flex items-center gap-2 text-sm font-bold tracking-widest uppercase"
-            >
-              Close <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

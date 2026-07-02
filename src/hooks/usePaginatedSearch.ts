@@ -76,6 +76,8 @@ export function usePaginatedSearch() {
         const url = `/api/search?${queryParams.toString()}`;
         const data = await fetchWithCache(url, controller.signal);
 
+        if (controller.signal.aborted) return;
+
         if (data) {
           setResults(data.results || []);
           setPagination({
@@ -83,9 +85,10 @@ export function usePaginatedSearch() {
             totalPages: data.totalPages || 1,
             hasNextPage: !!data.hasNextPage,
           });
+          setHasSearched(true);
         }
-        setHasSearched(true);
       } catch (err: any) {
+        if (controller.signal.aborted) return;
         if (err.name !== "AbortError") {
           console.error("Paginated search query error:", err);
           setHasSearched(true);

@@ -226,8 +226,17 @@ export default function CalendarClient() {
         // Combine resolved (from DB cache) and fetched (from AniList) schedules
         const combinedData = [...resolvedSchedules, ...fetchedSchedules];
 
+        // Deduplicate by mal_id to prevent React key collision warnings
+        const uniqueEntriesMap = new Map<number, CalendarEntry>();
+        combinedData.forEach((entry) => {
+          if (entry.mal_id) {
+            uniqueEntriesMap.set(entry.mal_id, entry);
+          }
+        });
+        const deduplicatedData = Array.from(uniqueEntriesMap.values());
+
         // Sort ascending by default (early airers first)
-        const sortedData = combinedData.sort((a: CalendarEntry, b: CalendarEntry) => {
+        const sortedData = deduplicatedData.sort((a: CalendarEntry, b: CalendarEntry) => {
           if (a.airingAt && b.airingAt) return a.airingAt - b.airingAt;
           if (a.airingAt) return -1;
           if (b.airingAt) return 1;

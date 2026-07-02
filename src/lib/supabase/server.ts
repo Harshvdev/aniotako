@@ -43,9 +43,11 @@ export async function getServerUser() {
   try {
     const headersList = await headers();
     const authChecked = headersList.get("x-auth-checked");
+    const userId = headersList.get("x-user-id");
+    const email = headersList.get("x-user-email");
+    console.log("[getServerUser] Headers:", { authChecked, userId, email });
+    
     if (authChecked === "true") {
-      const userId = headersList.get("x-user-id");
-      const email = headersList.get("x-user-email");
       if (userId) {
         return { id: userId, email: email || null } as any;
       }

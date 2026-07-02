@@ -3,20 +3,20 @@ import { createServerClient } from "@supabase/ssr";
 
 const AUTH_TIMEOUT_MS = 3000;
 
-async function getUserWithTimeout(supabase: any, timeoutMs = AUTH_TIMEOUT_MS) {
-  return Promise.race<Promise<unknown> | Promise<null>>([
-    supabase
-      .auth
-      .getUser()
-      .then(({ data }: any) => data?.user || null)
-      .catch((error: unknown) => {
-        console.error("Middleware DB Connection Failed. Failsafe activated.", error);
-        return null;
-      }),
-    new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), timeoutMs);
-    }),
-  ]);
+async function getUserWithTimeout(supabase: any, timeoutId: any) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    clearTimeout(timeoutId);
+    return user;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError" || (error.message && error.message.includes("abort"))) {
+      console.warn("Middleware auth query timed out.");
+    } else {
+      console.error("Middleware Auth Verification Failed:", error);
+    }
+    return null;
+  }
 }
 
 export async function proxy(request: NextRequest) {
@@ -29,22 +29,30 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/api/anilist/") ||
     path.startsWith("/api/jikan/") ||
     path === "/api/notify" ||
-    path.startsWith("/api/cron/");
+    path.startsWith("/api/cron/") ||
+    path.startsWith("/api/search");
 
   if (isBypassRoute) {
     return NextResponse.next({ request });
   }
 
-  // 1. Create an initial response object that we can mutate
+  // 1. Create an AbortController for timing out remote Auth requests
+  const authController = new AbortController();
+  const timeoutId = setTimeout(() => authController.abort(), AUTH_TIMEOUT_MS);
+
+  // 2. Create an initial response object that we can mutate
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  // 2. Initialize the Supabase client specifically for the proxy
+  // 3. Initialize the Supabase client specifically for the proxy with custom fetch abort
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: {
+        fetch: (url, options) => fetch(url, { ...options, signal: authController.signal }),
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -63,8 +71,8 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // 3. Fetch the user, but fail fast instead of waiting on a long Supabase timeout
-  const user = await getUserWithTimeout(supabase);
+  // 4. Fetch the user, but fail fast instead of waiting on a long Supabase timeout
+  const user = await getUserWithTimeout(supabase, timeoutId);
 
   // 4. Define our routing rules
   const protectedPaths = ["/settings", "/profile"];
@@ -77,13 +85,6 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = authPaths.includes(path);
 
   // 5. Execute Routing Logic
-  if (path === "/") {
-    const redirectUrl = url.clone();
-    redirectUrl.pathname = "/watchlist";
-    redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
-  }
-
   if (!user) {
     // Do NOT redirect API requests. Return a 401 JSON error instead.
     if (isApiRoute && !isCronRoute) {

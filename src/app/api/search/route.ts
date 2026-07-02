@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 
+interface CacheEntry {
+  data: any;
+  expiresAt: number;
+}
+
+const cacheMap = new Map<string, CacheEntry>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
+
 const SEARCH_QUERY = `
   query ($page: Int, $perPage: Int, $search: String, $type: MediaType, $format: MediaFormat, $status: MediaStatus, $genre_in: [String], $tag_in: [String], $sort: [MediaSort], $isAdult: Boolean, $averageScore_greater: Int, $averageScore_lesser: Int, $season: MediaSeason, $seasonYear: Int, $countryOfOrigin: CountryCode, $startDate_greater: FuzzyDateInt, $endDate_lesser: FuzzyDateInt) {
     Page(page: $page, perPage: $perPage) {
@@ -51,6 +59,12 @@ const parseFuzzyDate = (dateStr: string | null): number | undefined => {
 
 export async function GET(req: Request) {
   try {
+    const cacheKey = req.url;
+    const cached = cacheMap.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return NextResponse.json(cached.data);
+    }
+
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
     const page = parseInt(searchParams.get("page") || "1", 10);
@@ -165,12 +179,19 @@ export async function GET(req: Request) {
       status: m.status || "UNKNOWN",
     }));
 
-    return NextResponse.json({
+    const resultPayload = {
       results,
       page: pageInfo.currentPage,
       totalPages: pageInfo.lastPage || Math.ceil(results.length / 20) || 1,
       hasNextPage: pageInfo.hasNextPage,
+    };
+
+    cacheMap.set(cacheKey, {
+      data: resultPayload,
+      expiresAt: Date.now() + CACHE_TTL,
     });
+
+    return NextResponse.json(resultPayload);
   } catch (error: any) {
     console.error("[SEARCH API] Error:", error.message || error);
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });

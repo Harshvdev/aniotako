@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient, getServerUser } from "@/lib/supabase/server";
 import NavbarAuth from "@/components/NavbarAuth";
 import GlobalEnrichmentTracker from "@/components/GlobalEnrichmentTracker";
-import NProgressLoader from "@/components/NProgress";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import { TitleLanguageProvider } from "@/lib/TitleLanguageContext";
 import { WatchlistProvider } from "@/lib/WatchlistContext";
@@ -46,7 +45,6 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 pb-20">
-      <NProgressLoader />
       
       <TitleLanguageProvider>
         <WatchlistProvider initialWatchlist={watchlist}>

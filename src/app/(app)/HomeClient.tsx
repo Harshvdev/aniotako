@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "nextjs-toploader/app";
 import SearchBox from "@/components/search/SearchBox";
 import SearchAutocomplete from "@/components/search/SearchAutocomplete";
 import { useAutocompleteSearch, SearchResult } from "@/hooks/useAutocompleteSearch";

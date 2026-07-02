@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "nextjs-toploader/app";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 import { createClient } from "@/lib/supabase/client";
 

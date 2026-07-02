@@ -76,3 +76,13 @@ html {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
+
+/* Top loading bar styling overrides */
+#nprogress .bar {
+  background: linear-gradient(to right, #d946ef, #06b6d4) !important;
+  height: 3px !important;
+}
+#nprogress .peg {
+  box-shadow: 0 0 10px #d946ef, 0 0 5px #06b6d4 !important;
+}
+

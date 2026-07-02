@@ -2,7 +2,8 @@
 
 import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "nextjs-toploader/app";
 import { createClient } from "@/lib/supabase/client";
 
 // We extract the form into a separate component so we can wrap it in a Suspense boundary.

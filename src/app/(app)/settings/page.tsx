@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "nextjs-toploader/app";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";

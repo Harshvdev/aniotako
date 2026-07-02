@@ -10,6 +10,7 @@ interface ParsedAnime {
   score: number | null;
   watched_episodes: number;
   total_episodes: number | null;
+  created_at?: string;
 }
 
 interface PreviewCounts {
@@ -74,6 +75,10 @@ export default function ImportClient() {
         const score = parseInt(getNodeText(node, "my_score")) || 0;
         const totalEps = parseInt(getNodeText(node, "series_episodes")) || 0;
 
+        const rawCreatedAt = getNodeText(node, "created_at") || getNodeText(node, "added_at");
+        const fallbackDate = new Date(Date.now() - i * 1000).toISOString();
+        const createdAt = rawCreatedAt && !isNaN(Date.parse(rawCreatedAt)) ? rawCreatedAt : fallbackDate;
+
         entries.push({
           mal_id: parseInt(getNodeText(node, "series_animedb_id")) || 0,
           title: getNodeText(node, "series_title"),
@@ -81,6 +86,7 @@ export default function ImportClient() {
           score: score > 0 ? score : null,
           watched_episodes: parseInt(getNodeText(node, "my_watched_episodes")) || 0,
           total_episodes: totalEps > 0 ? totalEps : null,
+          created_at: createdAt,
         });
 
         newCounts.total++;
@@ -92,6 +98,7 @@ export default function ImportClient() {
       }
 
       if (entries.length === 0) throw new Error("No anime entries found in this XML file.");
+      entries.reverse();
       setParsedData(entries); setCounts(newCounts);
     } catch (err: any) { setError(err.message || "Failed to parse file."); } 
     finally { if (fileInputRef.current) fileInputRef.current.value = ""; }

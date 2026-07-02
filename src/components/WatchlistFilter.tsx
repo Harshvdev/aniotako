@@ -121,6 +121,19 @@ export default function WatchlistFilter({ entries, onFilter }: WatchlistFilterPr
     setSelectedGenres(prev => prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]);
   };
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedSort = localStorage.getItem("aniotako_sort") || "Updated";
+      const watchlistSortMap: Record<string, string> = {
+        "Updated": "Default",
+        "Title": "Title A-Z",
+        "Score": "Score (High)",
+        "Progress": "Episode Progress"
+      };
+      setSort(watchlistSortMap[savedSort] || "Default");
+    }
+  }, []);
+
   useEffect(() => { handleFilter(); }, [entries, type, status, airingStatus, score, season, year, sort, startDate, endDate, selectedGenres]);
 
   return (

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const AUTH_TIMEOUT_MS = 3000;
+const IS_DEV = process.env.NODE_ENV === "development";
+const AUTH_TIMEOUT_MS = IS_DEV ? 30000 : 6000;
 
 async function getUserWithTimeout(supabase: any, timeoutId: any) {
   try {

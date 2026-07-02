@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       .from("watchlist_entries")
       .select("mal_id, title, status, score, watched_episodes, total_episodes, created_at")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .order("title", { ascending: true });
 
     if (error) throw error;
 
@@ -77,6 +77,7 @@ export async function GET(req: Request) {
     <my_watched_episodes>${e.watched_episodes || 0}</my_watched_episodes>
     <my_score>${e.score || 0}</my_score>
     <my_status>${getMalStatus(e.status)}</my_status>
+    <added_at>${e.created_at}</added_at>
     <update_on_import>1</update_on_import>
   </anime>`).join("").trim()}
 </myanimelist>`;

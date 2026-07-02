@@ -13,6 +13,7 @@ interface WatchlistEntry {
   my_status: string;
   my_score: number;
   my_watched_episodes: number;
+  created_at?: string;
 }
 
 export default function ImportXML() {
@@ -72,6 +73,10 @@ export default function ImportXML() {
       // 4. Extract and map data
       for (let i = 0; i < animeNodes.length; i++) {
         const node = animeNodes[i];
+        const rawCreatedAt = getNodeText(node, "created_at") || getNodeText(node, "added_at");
+        const fallbackDate = new Date(Date.now() - i * 1000).toISOString();
+        const createdAt = rawCreatedAt && !isNaN(Date.parse(rawCreatedAt)) ? rawCreatedAt : fallbackDate;
+
         entries.push({
           user_id: user.id,
           series_animedb_id: parseInt(getNodeText(node, "series_animedb_id")) || 0,
@@ -81,12 +86,15 @@ export default function ImportXML() {
           my_status: getNodeText(node, "my_status").toLowerCase(),
           my_score: parseInt(getNodeText(node, "my_score")) || 0,
           my_watched_episodes: parseInt(getNodeText(node, "my_watched_episodes")) || 0,
+          created_at: createdAt,
         });
       }
 
       if (entries.length === 0) {
         throw new Error("No anime entries found in the file.");
       }
+
+      entries.reverse();
 
       // 5. Bulk Upsert in chunks (e.g., 100 at a time for safety and progress tracking)
       const chunkSize = 100;

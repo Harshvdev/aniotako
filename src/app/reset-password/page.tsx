@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "nextjs-toploader/app";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "@/components/Logo";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -68,14 +69,8 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-6 selection:bg-fuchsia-500/30 relative z-0 overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-fuchsia-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      <Link href="/" className="flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
-        <div className="w-8 h-8 rounded bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.5)]">
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <span className="text-xl font-bold tracking-wider text-white">ANIOTAKO</span>
+      <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
+        <Logo showText={true} size={36} />
       </Link>
 
       <div className="w-full max-w-md bg-zinc-900/50 border border-zinc-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl">

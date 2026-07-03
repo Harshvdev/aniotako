@@ -6,6 +6,7 @@ import GlobalEnrichmentTracker from "@/components/GlobalEnrichmentTracker";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import { TitleLanguageProvider } from "@/lib/TitleLanguageContext";
 import { WatchlistProvider } from "@/lib/WatchlistContext";
+import Logo from "@/components/Logo";
 
 export default async function AppLayout({
   children,
@@ -56,13 +57,13 @@ export default async function AppLayout({
               {/* Left: Mobile Nav & Logo */}
               <div className="flex items-center gap-3 sm:gap-4 flex-1">
                 <MobileNavDrawer />
-                <Link href="/" className="flex items-center gap-2 group shrink-0">
-                  <div className="w-8 h-8 rounded bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.3)] group-hover:scale-110 transition-transform shrink-0">
-                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    </svg>
-                  </div>
-                  <span className="text-xl font-bold tracking-wider text-white hidden md:block">ANIOTAKO</span>
+                <Link href="/" className="group shrink-0">
+                  <Logo
+                    showText={true}
+                    size={32}
+                    textClassName="hidden md:block transition-colors group-hover:text-fuchsia-400"
+                    className="group-hover:scale-105 transition-transform"
+                  />
                 </Link>
               </div>
 

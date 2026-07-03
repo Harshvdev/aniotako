@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "nextjs-toploader/app";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "@/components/Logo";
 
 // We extract the form into a separate component so we can wrap it in a Suspense boundary.
 // This is required by Next.js 14 when using useSearchParams() in a client component.
@@ -120,14 +121,8 @@ export default function LoginPage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       {/* Logo */}
-      <Link href="/" className="flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
-        <div className="w-8 h-8 rounded bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(8,145,178,0.5)]">
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <span className="text-xl font-bold tracking-wider text-white">ANIOTAKO</span>
+      <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
+        <Logo showText={true} size={36} />
       </Link>
 
       {/* Suspense boundary required by Next.js when using useSearchParams in Client Components */}

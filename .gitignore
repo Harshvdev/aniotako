@@ -47,6 +47,7 @@ next-env.d.ts
 /src/generated/prisma
 /graphify-out
 /.agents
+/.mimocode
 
 # Prisma
 *.db

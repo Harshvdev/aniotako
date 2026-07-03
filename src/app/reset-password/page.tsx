@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-fuchsia-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
-        <Logo showText={true} size={36} />
+        <Logo showText={true} size={52} />
       </Link>
 
       <div className="w-full max-w-md bg-zinc-900/50 border border-zinc-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl">

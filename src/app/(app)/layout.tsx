@@ -60,7 +60,7 @@ export default async function AppLayout({
                 <Link href="/" className="group shrink-0">
                   <Logo
                     showText={true}
-                    size={32}
+                    size={42}
                     textClassName="hidden md:block transition-colors group-hover:text-fuchsia-400"
                     className="group-hover:scale-105 transition-transform"
                   />

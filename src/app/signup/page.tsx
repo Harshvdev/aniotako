@@ -65,7 +65,7 @@ export default function SignupPage() {
 
       {/* Logo */}
       <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
-        <Logo showText={true} size={36} />
+        <Logo showText={true} size={52} />
       </Link>
 
       {/* Signup Card */}

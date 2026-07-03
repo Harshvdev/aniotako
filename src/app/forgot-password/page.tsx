@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
 
       {/* Logo */}
       <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
-        <Logo showText={true} size={36} />
+        <Logo showText={true} size={52} />
       </Link>
 
       <div className="w-full max-w-md bg-zinc-900/50 border border-zinc-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl">

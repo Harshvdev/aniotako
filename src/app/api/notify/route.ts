@@ -208,16 +208,56 @@ async function handler(req: Request) {
 
     const userIds = watchlistUsers.map((w) => w.user_id);
 
-    // Fetch user preferences for these users matching the notification format
+    // Fetch user preferences — NO format filter: we resolve the fallback chain in memory
     const { data: preferences, error: prefError } = await supabaseAdmin
       .from("user_preferences")
       .select("user_id, notification_format, timezone")
-      .in("user_id", userIds)
-      .eq("notification_format", format);
+      .in("user_id", userIds);
 
     if (prefError) throw prefError;
     if (!preferences || preferences.length === 0) {
-      return NextResponse.json({ ok: true, status: "No users watching active preference format target." }, { status: 200 });
+      return NextResponse.json({ ok: true, status: "No preferences found for watching users." }, { status: 200 });
+    }
+
+    // Determine which formats are available for this same episode across all queued events.
+    // This allows us to apply the fallback chain correctly:
+    //   dub pref: dub > sub > raw
+    //   sub pref: sub > raw
+    //   raw pref: raw only
+    const { data: episodeFormatEvents } = await supabaseAdmin
+      .from("notification_events")
+      .select("format")
+      .eq("mal_id", mal_id)
+      .eq("episode_number", episode);
+
+    const availableFormats = new Set(
+      episodeFormatEvents?.map((e: { format: string }) => e.format) ?? []
+    );
+
+    // Returns the format label to show the user, or null if this event should NOT be delivered
+    // to a user with the given preference under the fallback chain.
+    function resolveFormatDelivery(userPref: string | null, eventFormat: string): string | null {
+      const pref = userPref ?? "sub";
+
+      if (eventFormat === "raw") {
+        if (pref === "raw") return "RAW";
+        if (pref === "sub" && !availableFormats.has("sub")) return "RAW (Sub not yet available)";
+        if (pref === "dub" && !availableFormats.has("dub") && !availableFormats.has("sub")) return "RAW (Dub & Sub not yet available)";
+        return null;
+      }
+
+      if (eventFormat === "sub") {
+        if (pref === "sub") return "SUB";
+        if (pref === "dub" && !availableFormats.has("dub")) return "SUB (Dub not yet available)";
+        return null;
+      }
+
+      if (eventFormat === "dub") {
+        if (pref === "dub") return "DUB";
+        return null;
+      }
+
+      return null;
     }
 
     // Map watchlist entries with preferences in memory
@@ -230,7 +270,7 @@ async function handler(req: Request) {
           title: w.title,
           title_english: w.title_english,
           user_preferences: {
-            notification_format: pref?.notification_format,
+            notification_format: pref?.notification_format ?? "sub",
             timezone: pref?.timezone,
           },
         };
@@ -251,6 +291,14 @@ async function handler(req: Request) {
     const internalNotificationsToInsert: any[] = [];
 
     for (const user of usersToNotify) {
+      // 0. Resolve whether this event format should be delivered to this user
+      const userPref = (user.user_preferences as any)?.notification_format ?? "sub";
+      const formatLabel = resolveFormatDelivery(userPref, format);
+      if (!formatLabel) {
+        // This event format is not in the user's delivery chain — skip
+        continue;
+      }
+
       // 1. Fetch user's custom timezone (fallback to UTC if missing)
       const tz = (user.user_preferences as any)?.timezone || "UTC";
 
@@ -268,10 +316,10 @@ async function handler(req: Request) {
           minute: "2-digit",
         }).format(d);
 
-      // 3. Build personalized body text strings
+      // 3. Build personalized body text strings — include format label so users know which stream type
       const pushBody =
-        `Episode ${episode} of ${title} aired at ${formatDateTime(airedAt)}. ` +
-        `You got this notification at ${formatDateTime(receivedAt)}.`;
+        `[${formatLabel}] Episode ${episode} of ${title} aired at ${formatDateTime(airedAt)}. ` +
+        `Notified at ${formatDateTime(receivedAt)}.`;
 
       // 4. Stringify individual user payload configuration mapping
       const notificationPayload = JSON.stringify({

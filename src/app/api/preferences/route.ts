@@ -44,7 +44,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json();
 
-    const { notification_format, countdown_enabled, title_language, show_adult, timezone } = body;
+    const { notification_format, countdown_enabled, title_language, show_adult, timezone, notify_watching_only, email_notifications } = body;
     const updates: Record<string, any> = {};
 
     if (notification_format !== undefined) updates.notification_format = notification_format;
@@ -52,6 +52,8 @@ export async function PATCH(request: Request) {
     if (title_language !== undefined) updates.title_language = title_language;
     if (show_adult !== undefined) updates.show_adult = show_adult;
     if (timezone !== undefined) updates.timezone = timezone;
+    if (notify_watching_only !== undefined) updates.notify_watching_only = notify_watching_only;
+    if (email_notifications !== undefined) updates.email_notifications = email_notifications;
 
     const { data, error } = await supabase
       .from("user_preferences")

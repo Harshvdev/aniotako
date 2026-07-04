@@ -37,7 +37,7 @@ function formatRelativeTime(dateString: string) {
   if (diffInHours < 24) return `${diffInHours}h ago`;
   const diffInDays = Math.floor(diffInHours / 24);
   if (diffInDays < 7) return `${diffInDays}d ago`;
-  return date.toLocaleDateString();
+  return date.toLocaleDateString("en-US");
 }
 
 // Helper to format timestamps to an absolute readable date/time string

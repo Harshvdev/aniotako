@@ -218,10 +218,10 @@ export async function GET(req: NextRequest) {
       .not("anilist_id", "is", null)
       .limit(10000);
 
-    // Fetch the list of mal_ids that are currently being watched by any user
+    // Fetch all watching entries including user_id for the scanner-direct fallback
     const { data: watchingEntries, error: watchError } = await supabase
       .from("watchlist_entries")
-      .select("mal_id")
+      .select("user_id, mal_id")
       .eq("status", "watching");
 
     const watchingMalIds = new Set<number>();
@@ -515,6 +515,141 @@ export async function GET(req: NextRequest) {
     // Await all concurrent batch workers
     await Promise.all(qstashBatches);
 
+    // --- Step 8: Scanner-Direct Notification Fallback ---
+    // QStash delivery may be silently broken (publishJSON failures are swallowed by Promise.allSettled).
+    // As a reliable fallback, we query notification_events directly from the DB for ALL past episodes
+    // (up to 7 days) and insert notifications for any that haven't been delivered yet.
+    // NOTE: We query the DB here instead of filtering candidateNotifications because candidateNotifications
+    // only covers the current scanner window (past 5 min → future 2 hrs), missing all historical events.
+
+    let directNotificationsCreated = 0;
+
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch all past notification_events from the last 7 days
+    const { data: airedCandidateEvents, error: airedEventsError } = await supabase
+      .from("notification_events")
+      .select("id, event_key, mal_id, episode_number, format, aired_at")
+      .lt("aired_at", now.toISOString())
+      .gte("aired_at", sevenDaysAgo)
+      .order("aired_at", { ascending: false });
+
+    if (airedEventsError) console.error("[CRON Step8] Error fetching aired events:", airedEventsError.message);
+
+    const airedCandidates = airedCandidateEvents ?? [];
+
+    if (airedCandidates.length > 0 && watchingEntries && watchingEntries.length > 0) {
+      const airedEvents = airedCandidates;
+
+      const allWatchingUserIds = [...new Set(watchingEntries.map((e: any) => e.user_id))];
+      const { data: allPrefs } = await supabase
+        .from("user_preferences")
+        .select("user_id, notification_format, timezone")
+        .in("user_id", allWatchingUserIds);
+
+      const airedEventIds = airedEvents.map((e: any) => e.id);
+      const { data: existingNotifs } = await supabase
+        .from("notifications")
+        .select("user_id, notification_event_id")
+        .in("notification_event_id", airedEventIds);
+
+      const existingSet = new Set<string>(
+        existingNotifs?.map((n: any) => `${n.user_id}:${n.notification_event_id}`) ?? []
+      );
+
+      const episodeEventMap = new Map<string, { format: string; event: any }[]>();
+      for (const event of airedEvents) {
+        const key = `${Number(event.mal_id)}:${event.episode_number}`;
+        if (!episodeEventMap.has(key)) episodeEventMap.set(key, []);
+        episodeEventMap.get(key)!.push({ format: event.format, event });
+      }
+
+      const upsertMalIds = new Set(upsertPayloads.map((p: any) => Number(p.mal_id)));
+      const historicalMalIds = [...new Set(airedEvents.map((e: any) => Number(e.mal_id)))].filter(
+        (id) => !upsertMalIds.has(id)
+      );
+      const historicalMetaMap = new Map<number, { title: string; poster_url: string | null }>();
+      if (historicalMalIds.length > 0) {
+        const { data: historicalMeta } = await supabase
+          .from("anime_metadata")
+          .select("mal_id, title, poster_url")
+          .in("mal_id", historicalMalIds);
+        historicalMeta?.forEach((m: any) => {
+          historicalMetaMap.set(Number(m.mal_id), { title: m.title ?? "", poster_url: m.poster_url ?? null });
+        });
+      }
+
+      function resolveFormatForScanner(
+        userPref: string,
+        available: Map<string, any>
+      ): { resolvedEvent: any; formatLabel: string } | null {
+        if (userPref === "raw") {
+          if (available.has("raw")) return { resolvedEvent: available.get("raw"), formatLabel: "RAW" };
+        } else if (userPref === "sub") {
+          if (available.has("sub")) return { resolvedEvent: available.get("sub"), formatLabel: "SUB" };
+          if (available.has("raw")) return { resolvedEvent: available.get("raw"), formatLabel: "RAW (Sub not yet available)" };
+        } else if (userPref === "dub") {
+          if (available.has("dub")) return { resolvedEvent: available.get("dub"), formatLabel: "DUB" };
+          if (available.has("sub")) return { resolvedEvent: available.get("sub"), formatLabel: "SUB (Dub not yet available)" };
+          if (available.has("raw")) return { resolvedEvent: available.get("raw"), formatLabel: "RAW (Dub & Sub not yet available)" };
+        }
+        return null;
+      }
+
+      const notificationsToInsertDirect: any[] = [];
+
+      for (const [episodeKey, episodeFormats] of episodeEventMap) {
+        const [malIdStr] = episodeKey.split(":");
+        const malId = Number(malIdStr);
+
+        const available = new Map(episodeFormats.map((f) => [f.format, f.event]));
+        const animePayload = upsertPayloads.find((p: any) => Number(p.mal_id) === malId)
+          ?? historicalMetaMap.get(malId)
+          ?? { title: "", poster_url: null };
+
+        const watchersForAnime = watchingEntries.filter((e: any) => Number(e.mal_id) === malId);
+        for (const watcher of watchersForAnime) {
+          const pref = allPrefs?.find((p: any) => p.user_id === watcher.user_id);
+          const userPref = pref?.notification_format ?? "sub";
+
+          const resolved = resolveFormatForScanner(userPref, available);
+          if (!resolved) continue;
+
+          const { resolvedEvent } = resolved;
+          const dupKey = `${watcher.user_id}:${resolvedEvent.id}`;
+          if (existingSet.has(dupKey)) continue;
+          existingSet.add(dupKey);
+
+          notificationsToInsertDirect.push({
+            user_id: watcher.user_id,
+            mal_id: malId,
+            anime_title: animePayload.title ?? "",
+            episode_number: resolvedEvent.episode_number,
+            poster_url: animePayload.poster_url ?? null,
+            format: resolvedEvent.format,
+            is_read: false,
+            aired_at: resolvedEvent.aired_at,
+            created_at: now.toISOString(),
+            notification_event_id: resolvedEvent.id,
+          });
+        }
+      }
+
+
+      for (let i = 0; i < notificationsToInsertDirect.length; i += DB_BATCH_SIZE) {
+        const chunk = notificationsToInsertDirect.slice(i, i + DB_BATCH_SIZE);
+        // Use upsert with ignoreDuplicates to handle the unique_daily_notification constraint
+        // (UNIQUE on user_id + mal_id + created_date). If a notification was already sent today
+        // for this anime, we skip silently rather than throw a constraint violation.
+        const { data: inserted, error: insertErr } = await supabase
+          .from("notifications")
+          .upsert(chunk, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
+          .select("id");
+        if (!insertErr) directNotificationsCreated += inserted?.length ?? 0;
+        else console.error("[CRON] Direct notification upsert error:", insertErr.message);
+      }
+    }
+
     // --- Step 7: Final Metric Return Assertions ---
     return NextResponse.json({
       shows_scanned: allTimetableShows.length,
@@ -523,6 +658,7 @@ export async function GET(req: NextRequest) {
       in_window: inWindowCount,
       queued: queuedStats,
       cache_updated: cacheUpdatedCount,
+      direct_notifications_created: directNotificationsCreated,
     });
 
   } catch (error: any) {

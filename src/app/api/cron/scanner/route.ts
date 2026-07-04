@@ -202,6 +202,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: "No airing shows found for this tracking period." });
     }
 
+    // --- Step 1.5: Extended 7-Day Metadata Refresh ---
+    // The notification window above only covers ±2 hours, so future episodes (e.g. next week)
+    // are never fetched and anime_metadata never gets their schedule. This extra fetch covers
+    // the next 7 days so the anime detail page always shows the correct upcoming episode info.
+    const sevenDayFetchWeeks = new Set<string>();
+    for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+      const d = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+      const { week, year } = getISOWeekAndYearUTC(d);
+      sevenDayFetchWeeks.add(`${year}-W${week}`);
+    }
+
+    let allExtendedShows: any[] = [...allTimetableShows]; // start with what we already have
+    for (const weekKey of sevenDayFetchWeeks) {
+      const [yearStr, weekStr] = weekKey.split("-W");
+      const weekNum = parseInt(weekStr, 10);
+      const yearNum = parseInt(yearStr, 10);
+      // Skip weeks already fetched for the notification window
+      if (weeksToFetch.some(w => w.week === weekNum && w.year === yearNum)) continue;
+
+      const extRes = await fetch(
+        `https://animeschedule.net/api/v3/timetables?week=${weekNum}&year=${yearNum}&tz=UTC`,
+        { headers: { Authorization: `Bearer ${process.env.ANIMESCHEDULE_TOKEN}` } }
+      );
+      if (extRes.ok) {
+        const extData = await extRes.json();
+        if (Array.isArray(extData)) allExtendedShows = allExtendedShows.concat(extData);
+      }
+    }
+
     // --- Step 2: Fetch All Anime Metadata from Supabase ---
     const { data: watchedRows, error: dbError } = await supabase
       .from("anime_metadata")
@@ -266,20 +295,33 @@ export async function GET(req: NextRequest) {
     });
 
     // --- Step 3: Match Schedule Data via IDs or Deep Fuzzy Text Titles ---
-    const matchedShows: any[] = [];
-    for (const show of allTimetableShows) {
+    // Two independent passes:
+    //   extendedMatchedShows - all 7-day shows, used for anime_metadata upsert (display info)
+    //   matchedShows         - notification-window shows only, used for notification candidates
+    const extendedMatchedShows: any[] = [];
+    for (const show of allExtendedShows) {
       let matchedAnilistId = extractAniListId(show);
-
       if (!matchedAnilistId) {
         for (const title of extractShowTitles(show)) {
           const mappedId = titleToAnilistIdMap.get(title);
-          if (mappedId) {
-            matchedAnilistId = mappedId;
-            break;
-          }
+          if (mappedId) { matchedAnilistId = mappedId; break; }
         }
       }
+      if (matchedAnilistId && watchedAnilistIds.has(matchedAnilistId)) {
+        show.parsedAnilistId = matchedAnilistId;
+        extendedMatchedShows.push(show);
+      }
+    }
 
+    const matchedShows: any[] = [];
+    for (const show of allTimetableShows) {
+      let matchedAnilistId = extractAniListId(show);
+      if (!matchedAnilistId) {
+        for (const title of extractShowTitles(show)) {
+          const mappedId = titleToAnilistIdMap.get(title);
+          if (mappedId) { matchedAnilistId = mappedId; break; }
+        }
+      }
       if (matchedAnilistId && watchedAnilistIds.has(matchedAnilistId)) {
         show.parsedAnilistId = matchedAnilistId;
         matchedShows.push(show);
@@ -287,9 +329,11 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Step 4: Group & Merge Schedule Data by Anime ---
+    // Uses extendedMatchedShows (7-day window) so that next-episode info is always fresh
+    // on the anime detail page, even when the next episode is days away.
     const groupedShows = new Map<number, any>();
 
-    matchedShows.forEach((show) => {
+    extendedMatchedShows.forEach((show) => {
       const anilistId = show.parsedAnilistId;
       const malId = anilistToMalMap.get(anilistId) ?? null;
       const posterUrl = show.imageVersionRoute ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}` : null;

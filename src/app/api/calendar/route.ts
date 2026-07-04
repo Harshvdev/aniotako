@@ -134,11 +134,16 @@ export async function GET(req: Request) {
           airing_status: meta.airing_status || null,
         });
       } else {
-        // Fallback: If not cached for this week, we only query AniList if the show is NOT finished
-        const status = (meta.airing_status || "").toUpperCase();
-        const isFinished = status === "FINISHED" || status === "FINISHED AIRING" || status === "CANCELLED";
-        if (!isFinished) {
-          fallbackAnilistIds.push(anilistId);
+        // Only fall back to AniList if we have NO cached schedule data at all.
+        // If we have a date in DB (even on a different day), trust our AnimeSchedule-sourced
+        // cache over AniList's potentially stale data.
+        const hasAnyCachedSchedule = airTimes.some(t => t.time !== null);
+        if (!hasAnyCachedSchedule) {
+          const status = (meta.airing_status || "").toUpperCase();
+          const isFinished = status === "FINISHED" || status === "FINISHED AIRING" || status === "CANCELLED";
+          if (!isFinished) {
+            fallbackAnilistIds.push(anilistId);
+          }
         }
       }
     });

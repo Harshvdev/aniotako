@@ -333,6 +333,20 @@ export async function GET(req: NextRequest) {
     // on the anime detail page, even when the next episode is days away.
     const groupedShows = new Map<number, any>();
 
+    // Helper: decide if a new air time is "better" than the existing one for the
+    // "next episode" semantic — prefer earliest FUTURE, fall back to latest PAST.
+    const nowUnixSec = Math.floor(now.getTime() / 1000);
+    const pickBetter = (existing: number | null, newTime: number | null): boolean => {
+      if (newTime === null) return false;
+      if (existing === null) return true;
+      const existFuture = existing > nowUnixSec;
+      const newFuture   = newTime  > nowUnixSec;
+      if ( newFuture && !existFuture) return true;              // prefer future over past
+      if (!newFuture &&  existFuture) return false;             // don't replace future with past
+      if ( newFuture &&  existFuture) return newTime < existing; // earlier future wins
+      return newTime > existing;                                // both past: more recent wins
+    };
+
     extendedMatchedShows.forEach((show) => {
       const anilistId = show.parsedAnilistId;
       const malId = anilistToMalMap.get(anilistId) ?? null;
@@ -375,15 +389,21 @@ export async function GET(req: NextRequest) {
       }
 
       if (show.airType === "raw") {
-        payload.raw_air_at = episodeDateVal;
-        payload.raw_next_episode_number = episodeNumVal;
-        payload.next_episode_number = episodeNumVal;
+        if (pickBetter(payload.raw_air_at, episodeDateVal)) {
+          payload.raw_air_at = episodeDateVal;
+          payload.raw_next_episode_number = episodeNumVal;
+          payload.next_episode_number = episodeNumVal;
+        }
       } else if (show.airType === "sub") {
-        payload.sub_air_at = episodeDateVal;
-        payload.sub_next_episode_number = episodeNumVal;
+        if (pickBetter(payload.sub_air_at, episodeDateVal)) {
+          payload.sub_air_at = episodeDateVal;
+          payload.sub_next_episode_number = episodeNumVal;
+        }
       } else if (show.airType === "dub") {
-        payload.dub_air_at = episodeDateVal;
-        payload.dub_next_episode_number = episodeNumVal;
+        if (pickBetter(payload.dub_air_at, episodeDateVal)) {
+          payload.dub_air_at = episodeDateVal;
+          payload.dub_next_episode_number = episodeNumVal;
+        }
       }
     });
 
@@ -609,19 +629,36 @@ export async function GET(req: NextRequest) {
       }
 
       const upsertMalIds = new Set(upsertPayloads.map((p: any) => Number(p.mal_id)));
-      const historicalMalIds = [...new Set(airedEvents.map((e: any) => Number(e.mal_id)))].filter(
-        (id) => !upsertMalIds.has(id)
-      );
-      const historicalMetaMap = new Map<number, { title: string; poster_url: string | null }>();
-      if (historicalMalIds.length > 0) {
+      // All unique MAL IDs from aired events — including both current-scan and historical
+      const allAiredMalIds = [...new Set(airedEvents.map((e: any) => Number(e.mal_id)))];
+      const historicalMalIds = allAiredMalIds.filter((id) => !upsertMalIds.has(id));
+
+      const historicalMetaMap = new Map<number, { title: string; poster_url: string | null; airing_status: string | null }>();
+      // Fetch from ALL mal_ids (including current-scan ones) so we get AniList poster URLs for everyone.
+      // upsertPayloads.poster_url uses animeschedule.net imageVersionRoute which is hotlink-blocked.
+      if (allAiredMalIds.length > 0) {
         const { data: historicalMeta } = await supabase
           .from("anime_metadata")
-          .select("mal_id, title, poster_url")
-          .in("mal_id", historicalMalIds);
+          .select("mal_id, title, poster_url, airing_status")
+          .in("mal_id", allAiredMalIds);
         historicalMeta?.forEach((m: any) => {
-          historicalMetaMap.set(Number(m.mal_id), { title: m.title ?? "", poster_url: m.poster_url ?? null });
+          historicalMetaMap.set(Number(m.mal_id), {
+            title: m.title ?? "",
+            poster_url: m.poster_url ?? null,
+            airing_status: m.airing_status ?? null,
+          });
         });
       }
+
+      // Build a set of FINISHED/CANCELLED MAL IDs to skip — prevents false notifications
+      // for shows that were spuriously matched in a previous scanner run.
+      const FINISHED_STATUSES = new Set(["FINISHED", "FINISHED AIRING", "CANCELLED"]);
+      const finishedMalIds = new Set<number>();
+      for (const [malId, meta] of historicalMetaMap) {
+        if (FINISHED_STATUSES.has((meta.airing_status ?? "").toUpperCase())) finishedMalIds.add(malId);
+      }
+      // Also skip any MAL ID in upsertPayloads marked finished
+      upsertPayloads.forEach((p: any) => { if (p.is_finished) finishedMalIds.add(Number(p.mal_id)); });
 
       function resolveFormatForScanner(
         userPref: string,
@@ -646,10 +683,20 @@ export async function GET(req: NextRequest) {
         const [malIdStr] = episodeKey.split(":");
         const malId = Number(malIdStr);
 
+        // Skip events for FINISHED/CANCELLED anime — avoids notifying about old episodes
+        // that were accidentally matched by the scanner in a prior run.
+        if (finishedMalIds.has(malId)) continue;
+
         const available = new Map(episodeFormats.map((f) => [f.format, f.event]));
-        const animePayload = upsertPayloads.find((p: any) => Number(p.mal_id) === malId)
-          ?? historicalMetaMap.get(malId)
-          ?? { title: "", poster_url: null };
+        // For notification inserts, always prefer anime_metadata.poster_url (AniList CDN, publicly
+        // accessible) over the imageVersionRoute URL from upsertPayloads (animeschedule.net, hotlink-blocked).
+        const dbMeta = historicalMetaMap.get(malId);
+        const currentScanPayload = upsertPayloads.find((p: any) => Number(p.mal_id) === malId);
+        const animePayload = {
+          title: currentScanPayload?.title ?? dbMeta?.title ?? "",
+          // Prefer DB poster (AniList URL) — fall back to scan payload only if DB has nothing
+          poster_url: dbMeta?.poster_url ?? currentScanPayload?.poster_url ?? null,
+        };
 
         const watchersForAnime = watchingEntries.filter((e: any) => Number(e.mal_id) === malId);
         for (const watcher of watchersForAnime) {

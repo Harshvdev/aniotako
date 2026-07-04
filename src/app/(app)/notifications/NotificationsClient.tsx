@@ -10,6 +10,7 @@ interface Notification {
   anime_title: string;
   episode_number: number | null;
   poster_url: string | null;
+  format: string | null;
   is_read: boolean;
   created_at: string;
   aired_at: string | null;
@@ -190,6 +191,14 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                               title_romaji: notif.anime_metadata?.title_romaji
                             })}
                           </h3>
+                          {/* Episode + format badge */}
+                          <p className={`text-sm font-semibold mt-0.5 ${
+                            notif.format === "dub" ? "text-cyan-400" :
+                            notif.format === "raw" ? "text-amber-400" :
+                            "text-fuchsia-400"
+                          }`}>
+                            Episode {notif.episode_number ?? "?"} ({(notif.format ?? "sub").toUpperCase()})
+                          </p>
                           {/* Display localized exact air and dispatch times */}
                           <p className="text-sm text-zinc-400 mt-0.5">
                             Aired: {notif.aired_at ? formatAbsoluteTime(notif.aired_at) : "Unknown"}

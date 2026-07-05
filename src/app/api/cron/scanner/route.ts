@@ -462,9 +462,14 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Step 5: Compile Notification Window Candidates ---
+    let directNotificationsCreated = 0;
     const candidateNotifications: any[] = [];
     const candidateQStashMessages: any[] = [];
+    // Direct-insert candidates: shows that ALREADY aired (within the -5 min backfill).
+    // These don't need QStash scheduling — we insert their notifications right now.
+    const candidateDirectInsert: any[] = [];
     const allCandidateKeys: string[] = [];
+    const nowUnix = Math.floor(now.getTime() / 1000);
 
     upsertPayloads.forEach((payload) => {
       const anilistId = payload.anilist_id;
@@ -488,6 +493,8 @@ export async function GET(req: NextRequest) {
           const eventKey = `${malId}:${fmt.ep}:${fmt.type}:${fmt.time}`;
           allCandidateKeys.push(eventKey);
 
+          const hasAlreadyAired = fmt.time <= nowUnix;
+
           candidateNotifications.push({
             event_key: eventKey,
             anilist_id: anilistId,
@@ -497,21 +504,35 @@ export async function GET(req: NextRequest) {
             aired_at: new Date(fmt.time * 1000).toISOString(),
           });
 
-          candidateQStashMessages.push({
-            eventKey, 
-            url: `${siteUrl}/api/notify`,
-            body: {
-              anilist_id: anilistId,
-              mal_id: malId,
-              episode: fmt.ep,
+          if (hasAlreadyAired) {
+            // Already aired — record it for immediate direct DB insertion (bypass QStash).
+            candidateDirectInsert.push({
+              eventKey,
+              malId,
+              episodeNumber: fmt.ep,
               format: fmt.type,
-              scheduled_at: fmt.time,
+              airedAt: new Date(fmt.time * 1000).toISOString(),
               title: payload.title,
-              poster_url: posterUrl,
-            },
-            notBefore: fmt.time,
-            retries: 2,
-          });
+              posterUrl,
+            });
+          } else {
+            // Future episode — QStash schedules delivery at the exact air time.
+            candidateQStashMessages.push({
+              eventKey,
+              url: `${siteUrl}/api/notify`,
+              body: {
+                anilist_id: anilistId,
+                mal_id: malId,
+                episode: fmt.ep,
+                format: fmt.type,
+                scheduled_at: fmt.time,
+                title: payload.title,
+                poster_url: posterUrl,
+              },
+              notBefore: fmt.time,
+              retries: 2,
+            });
+          }
         }
       }
     });
@@ -534,9 +555,12 @@ export async function GET(req: NextRequest) {
     }
 
     const notificationsToInsert = candidateNotifications.filter(n => !existingEventKeys.has(n.event_key));
+    // Only queue future episodes to QStash — past ones are handled directly below.
     const finalQStashMessages = candidateQStashMessages
       .filter(m => !existingEventKeys.has(m.eventKey))
       .map(({ eventKey, ...cleanPayload }) => cleanPayload);
+    // Past-aired candidates that aren't already in the DB.
+    const finalDirectInserts = candidateDirectInsert.filter(d => !existingEventKeys.has(d.eventKey));
 
     // Calculate metrics based on filtered state canvases
     const inWindowCount = candidateNotifications.length;
@@ -557,6 +581,114 @@ export async function GET(req: NextRequest) {
           onConflict: "event_key", 
           ignoreDuplicates: true 
         });
+    }
+
+    // Immediately deliver notifications for already-aired shows (bypass QStash).
+    // QStash is only useful for scheduling future delivery; for past episodes it adds
+    // latency when delivery silently fails. Direct insert ensures the notification
+    // appears within the same scanner run that detects the episode aired.
+    if (finalDirectInserts.length > 0 && watchingEntries && watchingEntries.length > 0) {
+      const directMalIds = [...new Set(finalDirectInserts.map(d => d.malId))];
+      const { data: directPrefs } = await supabase
+        .from("user_preferences")
+        .select("user_id, notification_format, timezone")
+        .in("user_id", [...new Set(watchingEntries.map((e: any) => e.user_id))]);
+
+      // Fetch AniList poster URLs for direct-insert shows
+      const { data: directMeta } = await supabase
+        .from("anime_metadata")
+        .select("mal_id, poster_url, title")
+        .in("mal_id", directMalIds);
+      const directMetaMap = new Map<number, { poster_url: string | null; title: string }>(
+        directMeta?.map((m: any) => [Number(m.mal_id), { poster_url: m.poster_url ?? null, title: m.title ?? "" }]) ?? []
+      );
+
+      // Fetch notification_events rows for the direct candidates so we have their IDs
+      const directEventKeys = finalDirectInserts.map(d => d.eventKey);
+      const { data: directEventRows } = await supabase
+        .from("notification_events")
+        .select("id, event_key")
+        .in("event_key", directEventKeys);
+      const directEventIdMap = new Map<string, string>(
+        directEventRows?.map((r: any) => [r.event_key, r.id]) ?? []
+      );
+
+      // Fetch already-delivered notifications to deduplicate
+      const directEventIds = [...directEventIdMap.values()];
+      const { data: alreadyDelivered } = directEventIds.length > 0
+        ? await supabase
+            .from("notifications")
+            .select("user_id, notification_event_id")
+            .in("notification_event_id", directEventIds)
+        : { data: [] };
+      const deliveredSet = new Set<string>(
+        alreadyDelivered?.map((n: any) => `${n.user_id}:${n.notification_event_id}`) ?? []
+      );
+
+      // Build a format→event map per episode
+      const directEpisodeMap = new Map<string, { format: string; data: any }[]>();
+      for (const d of finalDirectInserts) {
+        const key = `${d.malId}:${d.episodeNumber}`;
+        if (!directEpisodeMap.has(key)) directEpisodeMap.set(key, []);
+        directEpisodeMap.get(key)!.push({ format: d.format, data: d });
+      }
+
+      const immediateNotifications: any[] = [];
+      for (const [epKey, epFormats] of directEpisodeMap) {
+        const [malIdStr] = epKey.split(":");
+        const malId = Number(malIdStr);
+        const available = new Map(epFormats.map(f => [f.format, f]));
+        const meta = directMetaMap.get(malId);
+        const watchersForAnime = watchingEntries.filter((e: any) => Number(e.mal_id) === malId);
+
+        for (const watcher of watchersForAnime) {
+          const pref = directPrefs?.find((p: any) => p.user_id === watcher.user_id);
+          const userPref = pref?.notification_format ?? "sub";
+
+          // Apply format preference fallback chain
+          let chosen: { format: string; data: any } | null = null;
+          if (userPref === "raw") {
+            chosen = available.get("raw") ?? null;
+          } else if (userPref === "sub") {
+            chosen = available.get("sub") ?? available.get("raw") ?? null;
+          } else if (userPref === "dub") {
+            chosen = available.get("dub") ?? available.get("sub") ?? available.get("raw") ?? null;
+          }
+          if (!chosen) continue;
+
+          const eventId = directEventIdMap.get(chosen.data.eventKey);
+          if (!eventId) continue;
+          const dupKey = `${watcher.user_id}:${eventId}`;
+          if (deliveredSet.has(dupKey)) continue;
+          deliveredSet.add(dupKey);
+
+          const formatLabel =
+            chosen.format === "raw" ? "RAW" :
+            chosen.format === "sub" ? "SUB" :
+            chosen.format === "dub" ? "DUB" : chosen.format.toUpperCase();
+
+          immediateNotifications.push({
+            user_id: watcher.user_id,
+            mal_id: malId,
+            anime_title: meta?.title ?? chosen.data.title ?? "",
+            episode_number: chosen.data.episodeNumber,
+            poster_url: meta?.poster_url ?? chosen.data.posterUrl ?? null,
+            format: formatLabel,
+            is_read: false,
+            aired_at: chosen.data.airedAt,
+            created_at: now.toISOString(),
+            notification_event_id: eventId,
+          });
+        }
+      }
+
+      for (let i = 0; i < immediateNotifications.length; i += DB_BATCH_SIZE) {
+        const chunk = immediateNotifications.slice(i, i + DB_BATCH_SIZE);
+        const { error: immErr } = await supabase.from("notifications").insert(chunk);
+        if (immErr) console.error("[CRON Step5-Direct] Insert error:", immErr.message);
+        else directNotificationsCreated += chunk.length;
+      }
+      console.log(`[CRON Step5-Direct] Immediately delivered ${immediateNotifications.length} notification(s) for ${finalDirectInserts.length} already-aired candidate(s).`);
     }
 
     // Load unique messages into QStash concurrently across chunks to maximize network I/O efficiency
@@ -586,7 +718,7 @@ export async function GET(req: NextRequest) {
     // NOTE: We query the DB here instead of filtering candidateNotifications because candidateNotifications
     // only covers the current scanner window (past 5 min → future 2 hrs), missing all historical events.
 
-    let directNotificationsCreated = 0;
+
 
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 

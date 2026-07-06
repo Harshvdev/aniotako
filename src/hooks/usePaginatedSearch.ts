@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
-import { useRouter } from "nextjs-toploader/app";
 import { useSearchQuery } from "./useSearchQuery";
 
 export interface PaginatedSearchResult {
@@ -19,7 +18,6 @@ export interface PaginatedSearchResult {
 }
 
 export function usePaginatedSearch() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { fetchWithCache, loading, error } = useSearchQuery();
@@ -135,7 +133,8 @@ export function usePaginatedSearch() {
       }
     });
 
-    router.push(`${pathname}?${current.toString()}`, { scroll: false });
+    const newUrl = `${pathname}?${current.toString()}`;
+    window.history.replaceState(null, "", newUrl);
   };
 
   return {

@@ -18,18 +18,18 @@ const qstash = new Client({
   ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
 });
 
-// Helper to compute ISO Week and Year matching the scheduling engine properties
+// Helper to compute ISO Week and Year matching the scheduling engine properties in UTC
 function getISOWeekAndYear(date: Date) {
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() !== 4) {
-    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.getTime();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay() + 7) % 7));
   }
-  const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
-  return { week: weekNum, year: target.getFullYear() };
+  const weekNum = 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
+  return { week: weekNum, year: target.getUTCFullYear() };
 }
 
 async function handler(req: Request) {
@@ -73,12 +73,25 @@ async function handler(req: Request) {
     let liveShowData = null;
 
     if (Array.isArray(timetableShows)) {
+      // Find the entry that matches BOTH the anilist_id and the requested format
       liveShowData = timetableShows.find((show: any) => {
         const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
         if (!anilistWeb) return false;
         const match = anilistWeb.url.match(/anime\/(\d+)/);
-        return match && parseInt(match[1], 10) === anilist_id;
+        const matchesId = match && parseInt(match[1], 10) === anilist_id;
+        const matchesFormat = show.airType === format;
+        return matchesId && matchesFormat;
       });
+
+      // Fallback: match by ID only if format-specific search yields nothing
+      if (!liveShowData) {
+        liveShowData = timetableShows.find((show: any) => {
+          const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
+          if (!anilistWeb) return false;
+          const match = anilistWeb.url.match(/anime\/(\d+)/);
+          return match && parseInt(match[1], 10) === anilist_id;
+        });
+      }
     }
 
     // Determine the corresponding dynamic property format targets
@@ -114,7 +127,19 @@ async function handler(req: Request) {
 
     let liveTimestampStr: string | null = null;
 
-    if (liveShowData?.route) {
+    // Direct Extraction from Timetable API (Pre-fetch optimization to avoid scrapers)
+    if (liveShowData) {
+      if (format === "raw") {
+        liveTimestampStr = liveShowData.episodeDate ?? liveShowData.rawPostDate ?? liveShowData.rawAirAt ?? null;
+      } else if (format === "sub") {
+        liveTimestampStr = liveShowData.subPostDate ?? liveShowData.subAirAt ?? liveShowData.subEpisodeDateTime ?? null;
+      } else if (format === "dub") {
+        liveTimestampStr = liveShowData.dubPostDate ?? liveShowData.dubAirAt ?? null;
+      }
+    }
+
+    // Fallback HTML Scrape only if timetable payload has no dates
+    if (!liveTimestampStr && liveShowData?.route) {
       const detailHtml = await fetchAnimeDetailHtml(liveShowData.route);
 
       if (detailHtml) {
@@ -122,26 +147,16 @@ async function handler(req: Request) {
           liveTimestampStr =
             extractField(detailHtml, ["rawPostDate", "raw_air_at", "rawAirAt", "episodeDate"]) ??
             liveShowData.episodeDate;
-        }
-
-        if (format === "sub") {
+        } else if (format === "sub") {
           liveTimestampStr =
             extractField(detailHtml, ["subPostDate", "sub_air_at", "subAirAt"]) ??
             liveShowData.subPostDate;
-        }
-
-        if (format === "dub") {
+        } else if (format === "dub") {
           liveTimestampStr =
             extractField(detailHtml, ["dubPostDate", "dub_air_at", "dubAirAt"]) ??
             liveShowData.dubPostDate;
         }
       }
-    }
-
-    if (!liveTimestampStr && liveShowData) {
-      if (format === "raw") liveTimestampStr = liveShowData.episodeDate;
-      if (format === "sub") liveTimestampStr = liveShowData.subPostDate;
-      if (format === "dub") liveTimestampStr = liveShowData.dubPostDate;
     }
 
     // CASE C: Episode canceled or field target evaluates to null
@@ -150,11 +165,23 @@ async function handler(req: Request) {
     }
 
     const liveUnix = Math.floor(new Date(liveTimestampStr).getTime() / 1000);
-    const differenceInSeconds = Math.abs(liveUnix - scheduled_at);
 
-    // CASE B: Delayed — Target shifted out of window bounds by more than 10 minutes
-    if (differenceInSeconds > 600 && liveUnix > nowUnix) {
-      // Re-queue the exact message structure to QStash aligned with the updated timeline
+    // CASE B: Delayed or not yet ready to air — reschedule to actual air time
+    if (liveUnix > nowUnix + 60) {
+      // 1. Ensure the new notification event key exists in the database
+      const newEventKey = `${mal_id}:${episode}:${format}:${liveUnix}`;
+      await supabaseAdmin
+        .from("notification_events")
+        .upsert({
+          event_key: newEventKey,
+          anilist_id,
+          mal_id,
+          episode_number: episode,
+          format,
+          aired_at: new Date(liveUnix * 1000).toISOString(),
+        }, { onConflict: "event_key", ignoreDuplicates: true });
+
+      // 2. Re-queue the exact message structure to QStash aligned with the updated timeline
       await qstash.publishJSON({
         url: siteUrl + "/api/notify",
         body: { 
@@ -171,12 +198,6 @@ async function handler(req: Request) {
       });
 
       return NextResponse.json({ ok: true, status: `Rescheduled delayed item to Unix timestamp: ${liveUnix}` }, { status: 200 });
-    }
-
-    // CASE A: Confirmed matching window targets (Proceed only if within limits and timestamp arrived)
-    const isReadyToAir = liveUnix <= (nowUnix + 60);
-    if (!isReadyToAir) {
-      return NextResponse.json({ ok: true, status: "Waiting window frame execution target mismatch." }, { status: 200 });
     }
 
     // --- Step 3: Fetch Global Event Identifier ---
@@ -287,6 +308,16 @@ async function handler(req: Request) {
       .select("*")
       .in("user_id", targetUserIds);
 
+    // Guard: Fetch existing notifications for the target users to prevent duplicate delivery in one query
+    const { data: existingNotifs, error: existError } = await supabaseAdmin
+      .from("notifications")
+      .select("user_id")
+      .eq("notification_event_id", eventId)
+      .in("user_id", targetUserIds);
+
+    if (existError) throw existError;
+    const existingDeliveredSet = new Set(existingNotifs?.map((n) => n.user_id) ?? []);
+
     const pushPromises: Promise<any>[] = [];
     const internalNotificationsToInsert: any[] = [];
 
@@ -336,15 +367,7 @@ async function handler(req: Request) {
         },
       });
 
-      // Guard: Check if this exact notification event has already been delivered to this specific user
-      const { data: existingNotif } = await supabaseAdmin
-        .from("notifications")
-        .select("id")
-        .eq("notification_event_id", eventId)
-        .eq("user_id", user.user_id)
-        .maybeSingle();
-
-      if (existingNotif) {
+      if (existingDeliveredSet.has(user.user_id)) {
         console.log(`[NOTIFY] Duplicate detected for user ${user.user_id} and event ${eventId}. Skipping.`);
         continue;
       }
@@ -399,10 +422,9 @@ async function handler(req: Request) {
     return NextResponse.json({ ok: true, status: "Dispatched target alerts successfully." }, { status: 200 });
 
   } catch (error: any) {
-    // Graceful errors catcher layout return schema structure. Always returns status 200
-    // so that operational logic drops or infrastructure failures don't get trapped in infinite QStash retry routines.
+    // Return a 500 status code for actual errors so QStash knows to retry
     console.error("JIT Delivery Engine Fail Exception:", error);
-    return NextResponse.json({ ok: false, error: error.message || "Execution exception skipped" }, { status: 200 });
+    return NextResponse.json({ ok: false, error: error.message || "Execution exception skipped" }, { status: 500 });
   }
 }
 

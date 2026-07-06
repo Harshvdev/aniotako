@@ -662,18 +662,13 @@ export async function GET(req: NextRequest) {
           if (deliveredSet.has(dupKey)) continue;
           deliveredSet.add(dupKey);
 
-          const formatLabel =
-            chosen.format === "raw" ? "RAW" :
-            chosen.format === "sub" ? "SUB" :
-            chosen.format === "dub" ? "DUB" : chosen.format.toUpperCase();
-
           immediateNotifications.push({
             user_id: watcher.user_id,
             mal_id: malId,
             anime_title: meta?.title ?? chosen.data.title ?? "",
             episode_number: chosen.data.episodeNumber,
             poster_url: meta?.poster_url ?? chosen.data.posterUrl ?? null,
-            format: formatLabel,
+            format: chosen.format,
             is_read: false,
             aired_at: chosen.data.airedAt,
             created_at: now.toISOString(),
@@ -684,9 +679,12 @@ export async function GET(req: NextRequest) {
 
       for (let i = 0; i < immediateNotifications.length; i += DB_BATCH_SIZE) {
         const chunk = immediateNotifications.slice(i, i + DB_BATCH_SIZE);
-        const { error: immErr } = await supabase.from("notifications").insert(chunk);
+        const { data: inserted, error: immErr } = await supabase
+          .from("notifications")
+          .upsert(chunk, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
+          .select("id");
         if (immErr) console.error("[CRON Step5-Direct] Insert error:", immErr.message);
-        else directNotificationsCreated += chunk.length;
+        else directNotificationsCreated += inserted?.length ?? 0;
       }
       console.log(`[CRON Step5-Direct] Immediately delivered ${immediateNotifications.length} notification(s) for ${finalDirectInserts.length} already-aired candidate(s).`);
     }

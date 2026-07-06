@@ -386,7 +386,9 @@ async function handler(req: Request) {
 
     // Execute database operations and background workers concurrently
     const dbPromise = internalNotificationsToInsert.length > 0
-      ? supabaseAdmin.from("notifications").insert(internalNotificationsToInsert)
+      ? supabaseAdmin
+          .from("notifications")
+          .upsert(internalNotificationsToInsert, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
       : Promise.resolve({ data: null, error: null });
 
     await Promise.all([

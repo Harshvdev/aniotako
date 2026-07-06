@@ -718,9 +718,57 @@ export async function GET(req: NextRequest) {
     // NOTE: We query the DB here instead of filtering candidateNotifications because candidateNotifications
     // only covers the current scanner window (past 5 min → future 2 hrs), missing all historical events.
 
-
-
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgoUnix = Math.floor(new Date(sevenDaysAgo).getTime() / 1000);
+
+    // --- Step 8a: Ensure notification_events exist for ALL past watched episodes ---
+    // If the cron missed the real-time window (e.g. episode aired between two cron runs,
+    // or QStash delivery silently failed), notification_events were never created for that
+    // episode, so Step 8 below had nothing to query. This step fills the gap by upserting
+    // notification_events directly from extendedMatchedShows timetable data.
+    const catchUpEvents: any[] = [];
+    for (const show of extendedMatchedShows) {
+      const malId = anilistToMalMap.get(show.parsedAnilistId) ?? null;
+      if (!malId || !watchingMalIds.has(malId)) continue;
+
+      // Determine the air time for this timetable entry's format
+      let airTime: number | null = null;
+      if (show.airType === "sub") {
+        airTime = toUnix(show.subPostDate ?? show.subAirAt ?? show.subEpisodeDateTime ?? show.episodeDate ?? show.rawPostDate ?? show.rawAirAt);
+      } else if (show.airType === "dub") {
+        airTime = toUnix(show.dubPostDate ?? show.dubAirAt);
+      } else {
+        airTime = toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawAirAt);
+      }
+
+      // Only create events for episodes that have already aired within the past 7 days
+      if (!airTime || airTime > nowUnixSec || airTime < sevenDaysAgoUnix) continue;
+
+      const epNum = normalizeEpisodeNumber(
+        show.episodeNumber ?? show.rawEpisodeNumber ?? show.subEpisodeNumber ?? show.dubEpisodeNumber
+      );
+      if (!epNum) continue;
+
+      const format = show.airType ?? "raw";
+      const eventKey = `${malId}:${epNum}:${format}:${airTime}`;
+
+      catchUpEvents.push({
+        event_key: eventKey,
+        anilist_id: show.parsedAnilistId,
+        mal_id: malId,
+        episode_number: epNum,
+        format,
+        aired_at: new Date(airTime * 1000).toISOString(),
+      });
+    }
+
+    if (catchUpEvents.length > 0) {
+      for (let i = 0; i < catchUpEvents.length; i += DB_BATCH_SIZE) {
+        const chunk = catchUpEvents.slice(i, i + DB_BATCH_SIZE);
+        await supabase.from("notification_events").upsert(chunk, { onConflict: "event_key", ignoreDuplicates: true });
+      }
+      console.log(`[CRON Step8a] Ensured ${catchUpEvents.length} notification_event(s) for past timetable episodes.`);
+    }
 
     // Fetch all past notification_events from the last 7 days
     const { data: airedCandidateEvents, error: airedEventsError } = await supabase

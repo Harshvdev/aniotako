@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 
+// In-memory rate limit: one clear-all per user per CLEAR_COOLDOWN_MS
+// (resets on server restart, but prevents rapid-fire abuse within a process)
+const CLEAR_COOLDOWN_MS = 60_000; // 60 seconds
+const lastClearedAt = new Map<string, number>();
+
 export async function GET(req: Request) {
   try {
     const supabase = await createClient();
@@ -61,6 +66,40 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ notifications: enrichedNotifications, unreadCount: totalUnreadCount });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = await createClient();
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Server-side rate limit: one clear per user per 60 s
+    const last = lastClearedAt.get(user.id) ?? 0;
+    const remaining = CLEAR_COOLDOWN_MS - (Date.now() - last);
+    if (remaining > 0) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before clearing again.", retryAfterMs: remaining },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(remaining / 1000)) },
+        }
+      );
+    }
+
+    lastClearedAt.set(user.id, Date.now());
+
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

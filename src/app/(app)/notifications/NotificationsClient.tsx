@@ -55,6 +55,8 @@ function formatAbsoluteTime(dateString: string) {
 
 export default function NotificationsClient({ initialNotifications }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [clearing, setClearing] = useState(false);
+  const [clearCooldown, setClearCooldown] = useState(0); // seconds remaining
   const router = useRouter();
   const { getTitle } = useTitleLanguage();
 
@@ -102,6 +104,50 @@ export default function NotificationsClient({ initialNotifications }: Props) {
     }
   };
 
+  const handleClearAll = async () => {
+    if (clearing || clearCooldown > 0 || notifications.length === 0) return;
+
+    setClearing(true);
+    const snapshot = notifications;
+    setNotifications([]); // optimistic clear
+
+    try {
+      const res = await fetch("/api/notifications", { method: "DELETE" });
+
+      if (res.status === 429) {
+        const body = await res.json();
+        const waitSec = Math.ceil((body.retryAfterMs ?? 60000) / 1000);
+        setNotifications(snapshot); // rollback
+        setClearCooldown(waitSec);
+        const tick = setInterval(() => {
+          setClearCooldown((s) => {
+            if (s <= 1) { clearInterval(tick); return 0; }
+            return s - 1;
+          });
+        }, 1000);
+        return;
+      }
+
+      if (!res.ok) {
+        setNotifications(snapshot); // rollback on error
+        return;
+      }
+
+      // Success — start a short UI cooldown so the button can't be hammered
+      setClearCooldown(3);
+      const tick = setInterval(() => {
+        setClearCooldown((s) => {
+          if (s <= 1) { clearInterval(tick); return 0; }
+          return s - 1;
+        });
+      }, 1000);
+    } catch {
+      setNotifications(snapshot);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const handleNotificationClick = async (notif: Notification) => {
     if (!notif.is_read) {
       // Optimistic update
@@ -121,22 +167,43 @@ export default function NotificationsClient({ initialNotifications }: Props) {
     <div className="max-w-4xl mx-auto px-6 py-12 relative z-10">
       
       {/* Header Area */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Notifications</h1>
-          <p className="text-zinc-400 text-sm">Stay up to date with your watching list.</p>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Notifications</h1>
+            <p className="text-zinc-400 text-sm">Stay up to date with your watching list.</p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {hasUnread && (
+              <button 
+                onClick={handleMarkAllAsRead}
+                className="px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors shadow-lg flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                Mark all as read
+              </button>
+            )}
+
+            {notifications.length > 0 && (
+              <button
+                id="clear-all-notifications"
+                onClick={handleClearAll}
+                disabled={clearing || clearCooldown > 0}
+                className="px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-bold text-rose-400 hover:text-rose-300 hover:bg-zinc-800 transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {clearing ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                )}
+                {clearCooldown > 0 ? `Wait ${clearCooldown}s` : "Clear all"}
+              </button>
+            )}
+          </div>
         </div>
-        
-        {hasUnread && (
-          <button 
-            onClick={handleMarkAllAsRead}
-            className="px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors shadow-lg flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-            Mark all as read
-          </button>
-        )}
-      </div>
 
       {/* Empty State */}
       {notifications.length === 0 ? (

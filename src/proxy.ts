@@ -27,11 +27,8 @@ export async function proxy(request: NextRequest) {
   // Skip auth work for public/internal data routes that should not depend on Supabase session lookups.
   // This prevents internal fetches like /api/anilist/... from stalling when Supabase is slow.
   const isBypassRoute =
-    path.startsWith("/api/anilist/") ||
-    path.startsWith("/api/jikan/") ||
     path === "/api/notify" ||
-    path.startsWith("/api/cron/") ||
-    path.startsWith("/api/search");
+    path.startsWith("/api/cron/");
 
   if (isBypassRoute) {
     return NextResponse.next({ request });

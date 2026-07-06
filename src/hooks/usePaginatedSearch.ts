@@ -1,26 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
-import { useSearchQuery } from "./useSearchQuery";
-
-export interface PaginatedSearchResult {
-  mal_id: number;
-  anilist_id: number;
-  title: string;
-  title_english: string | null;
-  title_romaji: string | null;
-  poster_url: string | null;
-  type: string;
-  episodes: number | null;
-  average_score: number | null;
-  year: number | null;
-  season: string | null;
-  status: string;
-}
+import { useSearchQuery, type PaginatedSearchResult } from "./useSearchQuery";
+export type { PaginatedSearchResult };
 
 export function usePaginatedSearch() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { fetchWithCache, loading, error } = useSearchQuery();
+  const { fetchPaginatedSearch, loading, error } = useSearchQuery();
 
   const [results, setResults] = useState<PaginatedSearchResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -57,23 +43,23 @@ export function usePaginatedSearch() {
 
     const performSearch = async () => {
       try {
-        const queryParams = new URLSearchParams();
-        if (query) queryParams.set("q", query);
-        if (page > 1) queryParams.set("page", page.toString());
-        if (type !== "All") queryParams.set("type", type);
-        if (status !== "All") queryParams.set("status", status);
-        if (score !== "All") queryParams.set("score", score);
-        if (orderBy !== "Popularity") queryParams.set("order_by", orderBy);
-        if (genres) queryParams.set("genres", genres);
-        if (season !== "All") queryParams.set("season", season);
-        if (year !== "All") queryParams.set("year", year);
-        if (language !== "All") queryParams.set("language", language);
-        if (rated !== "All") queryParams.set("rated", rated);
-        if (startDate) queryParams.set("start_date", startDate);
-        if (endDate) queryParams.set("end_date", endDate);
+        const filters = {
+          q: query,
+          page,
+          type,
+          status,
+          score,
+          order_by: orderBy,
+          genres,
+          season,
+          year,
+          language,
+          rated,
+          start_date: startDate,
+          end_date: endDate,
+        };
 
-        const url = `/api/search?${queryParams.toString()}`;
-        const data = await fetchWithCache(url, controller.signal);
+        const data = await fetchPaginatedSearch(filters, controller.signal);
 
         if (controller.signal.aborted) return;
 
@@ -86,9 +72,9 @@ export function usePaginatedSearch() {
           });
           setHasSearched(true);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (controller.signal.aborted) return;
-        if (err.name !== "AbortError") {
+        if (err instanceof Error && err.name !== "AbortError") {
           console.error("Paginated search query error:", err);
           setHasSearched(true);
         }
@@ -114,7 +100,7 @@ export function usePaginatedSearch() {
     rated,
     startDate,
     endDate,
-    fetchWithCache,
+    fetchPaginatedSearch,
   ]);
 
   const updateFilters = (newFilters: Record<string, string | number | null>) => {

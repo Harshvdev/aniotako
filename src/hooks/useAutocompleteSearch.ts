@@ -1,25 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchQuery } from "./useSearchQuery";
-
-export interface SearchResult {
-  mal_id: number;
-  anilist_id: number;
-  title: string;
-  title_english: string | null;
-  title_romaji: string | null;
-  poster_url: string | null;
-  type: string;
-  episodes: number | null;
-  year: number | null;
-  status: string;
-}
+import { useSearchQuery, type SearchResult } from "./useSearchQuery";
+export type { SearchResult };
 
 export function useAutocompleteSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const { fetchWithCache, loading, error } = useSearchQuery();
+  const { fetchAutocompleteSearch, loading, error } = useSearchQuery();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -39,16 +27,15 @@ export function useAutocompleteSearch() {
 
     const delayDebounce = setTimeout(async () => {
       try {
-        const url = `/api/search/autocomplete?q=${encodeURIComponent(query.trim())}`;
-        const data = await fetchWithCache(url, controller.signal);
+        const data = await fetchAutocompleteSearch(query, controller.signal);
         if (data && data.results) {
           // Limit results to maximum 8 items
           setResults(data.results.slice(0, 8));
           setShowDropdown(data.results.length > 0);
           setActiveIndex(-1);
         }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") {
           console.error("Autocomplete search error:", err);
         }
       }
@@ -58,7 +45,7 @@ export function useAutocompleteSearch() {
       clearTimeout(delayDebounce);
       controller.abort();
     };
-  }, [query]);
+  }, [query, fetchAutocompleteSearch]);
 
   const handleKeyDown = (
     e: React.KeyboardEvent,

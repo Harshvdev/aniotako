@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
@@ -386,11 +386,11 @@ function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true 
     normalizeUnix(meta?.next_episode_number) ??
     null;
 
-  const airingSlots: AiringSlot[] = [
+  const airingSlots: AiringSlot[] = useMemo(() => [
     { key: "raw", label: "Raw", unix: rawUnix, episode: rawEpisodeNumber },
     { key: "sub", label: "Sub", unix: subUnix, episode: subEpisodeNumber },
     { key: "dub", label: "Dub", unix: dubUnix, episode: dubEpisodeNumber },
-  ];
+  ], [rawUnix, subUnix, dubUnix, rawEpisodeNumber, subEpisodeNumber, dubEpisodeNumber]);
 
   const hasAiringSchedule = rawUnix !== null || subUnix !== null || dubUnix !== null;
   const showAiringSchedule = 
@@ -428,7 +428,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true 
     updateCountdowns();
     const intervalId = window.setInterval(updateCountdowns, 1000);
     return () => window.clearInterval(intervalId);
-  }, [showAiringSchedule, preferences.countdown_enabled]);
+  }, [showAiringSchedule, preferences.countdown_enabled, airingSlots]);
 
   const handleAdd = async () => {
     setIsUpdating(true);

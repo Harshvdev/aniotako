@@ -101,7 +101,11 @@ export default async function AnimePage(props: { params: Promise<{ id: string }>
       .single();
 
     if (prefsRow) {
-      userPrefs = prefsRow;
+      userPrefs = {
+        timezone: prefsRow.timezone || "",
+        notification_format: prefsRow.notification_format || "sub",
+        countdown_enabled: prefsRow.countdown_enabled !== false,
+      };
     }
   }
 

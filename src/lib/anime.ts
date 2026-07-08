@@ -81,7 +81,24 @@ export async function getAnimeDetails(malId: number) {
       .single();
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const isStale = !meta || !meta.cached_at || new Date(meta.cached_at) < sevenDaysAgo;
+    let isStale = !meta || !meta.cached_at || new Date(meta.cached_at) < sevenDaysAgo;
+
+    // If the anime is releasing, check for updates more frequently (e.g., every 24 hours)
+    if (!isStale && meta && meta.airing_status === "RELEASING") {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      if (new Date(meta.cached_at) < oneDayAgo) {
+        isStale = true;
+      }
+    }
+
+    // If the cached next airing episode has already aired, force a cache refresh
+    if (!isStale && meta?.anilist_raw) {
+      const raw = meta.anilist_raw as any;
+      const airingAt = raw?.nextAiringEpisode?.airingAt;
+      if (airingAt && airingAt * 1000 < Date.now()) {
+        isStale = true;
+      }
+    }
 
     if (!isStale && meta?.anilist_raw) {
       return meta.anilist_raw;

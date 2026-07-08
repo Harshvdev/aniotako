@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import prisma from "@/lib/prisma";
 
 // In-memory rate limit: one clear-all per user per CLEAR_COOLDOWN_MS
 // (resets on server restart, but prevents rapid-fire abuse within a process)
@@ -92,12 +93,11 @@ export async function DELETE(req: Request) {
 
     lastClearedAt.set(user.id, Date.now());
 
-    const { error } = await supabase
-      .from("notifications")
-      .delete()
-      .eq("user_id", user.id);
-
-    if (error) throw error;
+    await prisma.notifications.deleteMany({
+      where: {
+        user_id: user.id,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

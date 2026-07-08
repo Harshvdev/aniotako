@@ -368,6 +368,7 @@ export async function GET(req: NextRequest) {
           anilist_id: anilistId,
           mal_id: malId,
           title: show.title,
+          route: show.route,
           poster_url: posterUrl,
           raw_air_at: null,
           sub_air_at: null,
@@ -450,7 +451,7 @@ export async function GET(req: NextRequest) {
 
     // Bulk execute database metadata updates matching unique target schema constraint ('mal_id') from File 1
     let cacheUpdatedCount = 0;
-    const dbPayloads = upsertPayloads.map(({ title, poster_url, is_finished, ...dbData }) => dbData);
+    const dbPayloads = upsertPayloads.map(({ title, poster_url, route, is_finished, ...dbData }) => dbData);
     for (let i = 0; i < dbPayloads.length; i += DB_BATCH_SIZE) {
       const chunk = dbPayloads.slice(i, i + DB_BATCH_SIZE);
       const { error: upsertError } = await supabase
@@ -523,6 +524,7 @@ export async function GET(req: NextRequest) {
               body: {
                 anilist_id: anilistId,
                 mal_id: malId,
+                route: payload.route,
                 episode: fmt.ep,
                 format: fmt.type,
                 scheduled_at: fmt.time,

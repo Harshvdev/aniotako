@@ -39,6 +39,7 @@ async function handler(req: Request) {
     const { 
       anilist_id, 
       mal_id, 
+      route,
       episode, 
       format, 
       scheduled_at, 
@@ -73,23 +74,20 @@ async function handler(req: Request) {
     let liveShowData = null;
 
     if (Array.isArray(timetableShows)) {
-      // Find the entry that matches BOTH the anilist_id and the requested format
+      // Find the entry that matches the anime identifier and the requested format
       liveShowData = timetableShows.find((show: any) => {
-        const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
-        if (!anilistWeb) return false;
-        const match = anilistWeb.url.match(/anime\/(\d+)/);
-        const matchesId = match && parseInt(match[1], 10) === anilist_id;
+        const matchesRoute = route ? show.route === route : false;
+        const matchesTitle = show.title === title;
         const matchesFormat = show.airType === format;
-        return matchesId && matchesFormat;
+        return (matchesRoute || matchesTitle) && matchesFormat;
       });
 
-      // Fallback: match by ID only if format-specific search yields nothing
+      // Fallback: match without format if format-specific search yields nothing
       if (!liveShowData) {
         liveShowData = timetableShows.find((show: any) => {
-          const anilistWeb = show.websites?.find((w: any) => w.website === "AniList");
-          if (!anilistWeb) return false;
-          const match = anilistWeb.url.match(/anime\/(\d+)/);
-          return match && parseInt(match[1], 10) === anilist_id;
+          const matchesRoute = route ? show.route === route : false;
+          const matchesTitle = show.title === title;
+          return matchesRoute || matchesTitle;
         });
       }
     }

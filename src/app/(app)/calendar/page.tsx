@@ -1,8 +1,17 @@
 import { createClient, getServerUser } from "@/lib/supabase/server";
 import CalendarClient from "./CalendarClient";
 import FeatureLandingPage from "@/components/FeatureLandingPage";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Weekly Airing Calendar",
+  description: "View this week's scheduled anime releases, raw broadcasts, subbed episodes, and dubbed release times in your local timezone.",
+  alternates: {
+    canonical: "/calendar",
+  },
+};
 
 export default async function CalendarPage() {
   const supabase = await createClient();

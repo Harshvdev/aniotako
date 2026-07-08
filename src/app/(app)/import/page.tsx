@@ -1,8 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import ImportClient from "./ImportClient";
 import FeatureLandingPage from "@/components/FeatureLandingPage";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Import Anime Watchlist",
+  description: "Easily migrate and import your MyAnimeList XML watchlist backup into Aniotako to start tracking live episodes.",
+  alternates: {
+    canonical: "/import",
+  },
+};
 
 export default async function ImportPage() {
   const supabase = await createClient();

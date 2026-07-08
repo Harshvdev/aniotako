@@ -628,6 +628,12 @@ function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true 
                 {expandedSyn ? "Read Less" : "Read More"}
               </button>
             )}
+            
+            {/* Data Source Citation Badge */}
+            <div className="mt-4 pt-3 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>Data curated from AniList and MyAnimeList (Jikan API).</span>
+              <span className="font-semibold text-zinc-600">Source Verified</span>
+            </div>
           </div>
 
           {/* Info Grid */}

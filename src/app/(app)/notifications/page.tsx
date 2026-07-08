@@ -1,8 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import NotificationsClient from "./NotificationsClient";
 import FeatureLandingPage from "@/components/FeatureLandingPage";
+import type { Metadata } from "next";
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: "Anime Airing Notifications",
+  description: "Configure custom browser push notifications for your favorite anime series. Never miss a sub, dub, or raw episode release.",
+  alternates: {
+    canonical: "/notifications",
+  },
+};
 
 export default async function NotificationsPage() {
   const supabase = await createClient();

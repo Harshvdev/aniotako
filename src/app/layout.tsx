@@ -38,9 +38,33 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aniotako.com";
+
 export const metadata: Metadata = {
-  title: "Aniotako",
-  description: "Your personal anime watchlist",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Aniotako - Personal Anime Watchlist Tracker & Airing Scheduler",
+    template: "%s | Aniotako"
+  },
+  description: "Create your personal anime watchlist, check airing countdowns, and get real-time desktop push notifications for upcoming episodes in your local timezone.",
+  keywords: ["anime", "watchlist", "anime tracker", "airing schedule", "anime countdown", "push notifications", "MAL import", "AniList"],
+  authors: [{ name: "Aniotako Team" }],
+  creator: "Aniotako",
+  publisher: "Aniotako",
+  alternates: {
+    canonical: "./",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -48,6 +72,28 @@ export const metadata: Metadata = {
     apple: [
       { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
     ],
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "Aniotako",
+    title: "Aniotako - Personal Anime Watchlist Tracker & Airing Scheduler",
+    description: "Create your personal anime watchlist, check airing countdowns, and get real-time desktop push notifications for upcoming episodes in your local timezone.",
+    images: [
+      {
+        url: "/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "Aniotako Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aniotako - Personal Anime Watchlist Tracker & Airing Scheduler",
+    description: "Create your personal anime watchlist, check airing countdowns, and get real-time desktop push notifications for upcoming episodes in your local timezone.",
+    images: ["/icon-512.png"],
   },
 };
 

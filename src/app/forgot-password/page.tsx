@@ -39,6 +39,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-6 selection:bg-cyan-500/30 relative z-0 overflow-hidden">
+      <title>Forgot Password | Aniotako</title>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       {/* Logo */}

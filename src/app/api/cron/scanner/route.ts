@@ -683,7 +683,7 @@ export async function GET(req: NextRequest) {
         const chunk = immediateNotifications.slice(i, i + DB_BATCH_SIZE);
         const { data: inserted, error: immErr } = await supabase
           .from("notifications")
-          .upsert(chunk, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
+          .upsert(chunk, { onConflict: "user_id,notification_event_id", ignoreDuplicates: true })
           .select("id");
         if (immErr) console.error("[CRON Step5-Direct] Insert error:", immErr.message);
         else directNotificationsCreated += inserted?.length ?? 0;
@@ -909,12 +909,12 @@ export async function GET(req: NextRequest) {
 
       for (let i = 0; i < notificationsToInsertDirect.length; i += DB_BATCH_SIZE) {
         const chunk = notificationsToInsertDirect.slice(i, i + DB_BATCH_SIZE);
-        // Use upsert with ignoreDuplicates to handle the unique_daily_notification constraint
-        // (UNIQUE on user_id + mal_id + created_date). If a notification was already sent today
-        // for this anime, we skip silently rather than throw a constraint violation.
+        // Use upsert with ignoreDuplicates to handle the unique_user_event_notification constraint
+        // (UNIQUE on user_id + notification_event_id). If a notification was already sent
+        // for this event, we skip silently rather than throw a constraint violation.
         const { data: inserted, error: insertErr } = await supabase
           .from("notifications")
-          .upsert(chunk, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
+          .upsert(chunk, { onConflict: "user_id,notification_event_id", ignoreDuplicates: true })
           .select("id");
         if (!insertErr) directNotificationsCreated += inserted?.length ?? 0;
         else console.error("[CRON] Direct notification upsert error:", insertErr.message);

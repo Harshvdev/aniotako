@@ -175,7 +175,13 @@ export default function CalendarClient() {
       setError(null); 
       
       try {
-        const res = await fetch(`/api/calendar?date=${selectedDate}`);
+        const [y, m, d] = selectedDate.split('-').map(Number);
+        const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+        const startUnix = Math.floor(startOfDay.getTime() / 1000);
+        const endUnix = Math.floor(endOfDay.getTime() / 1000);
+        
+        const res = await fetch(`/api/calendar?start=${startUnix}&end=${endUnix}`);
         const contentType = res.headers.get("content-type");
         
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
@@ -274,7 +280,12 @@ export default function CalendarClient() {
       
       const fetchWeekDots = async () => {
         try {
-          const res = await fetch(`/api/calendar?date=${mondayStr}&week=true`);
+          const startOfWeek = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0, 0);
+          const endOfWeek = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 23, 59, 59, 999);
+          const startUnix = Math.floor(startOfWeek.getTime() / 1000);
+          const endUnix = Math.floor(endOfWeek.getTime() / 1000);
+          
+          const res = await fetch(`/api/calendar?start=${startUnix}&end=${endUnix}`);
           if (res.ok) {
             const json = await res.json();
             const resolvedSchedules = json.resolvedSchedules || [];

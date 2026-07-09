@@ -130,9 +130,9 @@ async function handler(req: Request) {
       if (format === "raw") {
         liveTimestampStr = liveShowData.episodeDate ?? liveShowData.rawPostDate ?? liveShowData.rawAirAt ?? null;
       } else if (format === "sub") {
-        liveTimestampStr = liveShowData.subPostDate ?? liveShowData.subAirAt ?? liveShowData.subEpisodeDateTime ?? null;
+        liveTimestampStr = liveShowData.subPostDate ?? liveShowData.subAirAt ?? liveShowData.subEpisodeDateTime ?? liveShowData.episodeDate ?? liveShowData.rawPostDate ?? liveShowData.rawAirAt ?? null;
       } else if (format === "dub") {
-        liveTimestampStr = liveShowData.dubPostDate ?? liveShowData.dubAirAt ?? null;
+        liveTimestampStr = liveShowData.dubPostDate ?? liveShowData.dubAirAt ?? liveShowData.episodeDate ?? liveShowData.rawPostDate ?? liveShowData.rawAirAt ?? null;
       }
     }
 
@@ -409,7 +409,7 @@ async function handler(req: Request) {
     const dbPromise = internalNotificationsToInsert.length > 0
       ? supabaseAdmin
           .from("notifications")
-          .upsert(internalNotificationsToInsert, { onConflict: "user_id,mal_id,created_date", ignoreDuplicates: true })
+          .upsert(internalNotificationsToInsert, { onConflict: "user_id,notification_event_id", ignoreDuplicates: true })
       : Promise.resolve({ data: null, error: null });
 
     await Promise.all([

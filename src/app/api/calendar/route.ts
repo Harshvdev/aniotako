@@ -4,45 +4,55 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const startParam = searchParams.get("start");
+    const endParam = searchParams.get("end");
     const dateParam = searchParams.get("date"); // Expected: YYYY-MM-DD
     const isWeek = searchParams.get("week") === "true";
     
     console.log(`\n--- [CALENDAR API] Request Started ---`);
-    console.log(`Params: date=${dateParam}, week=${isWeek}`);
+    console.log(`Params: start=${startParam}, end=${endParam}, date=${dateParam}, week=${isWeek}`);
 
-    if (!dateParam) {
-      return NextResponse.json({ error: "Missing date parameter" }, { status: 400 });
-    }
-
-    // Parse strictly as UTC
-    const targetDate = new Date(`${dateParam}T00:00:00Z`); 
     let startUnix: number, endUnix: number;
-    let mondayUtc = new Date(targetDate);
+    let mondayUtc: Date;
 
-    if (isWeek) {
-      // Get current week's Mon-Sun date range in UTC
-      const day = targetDate.getUTCDay();
-      const diffToMonday = day === 0 ? -6 : 1 - day;
-      
-      mondayUtc.setUTCDate(targetDate.getUTCDate() + diffToMonday);
-      mondayUtc.setUTCHours(0, 0, 0, 0);
-      
-      const sundayUtc = new Date(mondayUtc);
-      sundayUtc.setUTCDate(mondayUtc.getUTCDate() + 6);
-      sundayUtc.setUTCHours(23, 59, 59, 999);
-
-      startUnix = Math.floor(mondayUtc.getTime() / 1000);
-      endUnix = Math.floor(sundayUtc.getTime() / 1000);
+    if (startParam && endParam) {
+      startUnix = parseInt(startParam, 10);
+      endUnix = parseInt(endParam, 10);
+      mondayUtc = new Date(startUnix * 1000);
     } else {
-      // Get exact start and end of the specific day in UTC boundaries
-      const startOfDay = new Date(targetDate);
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      
-      const endOfDay = new Date(targetDate);
-      endOfDay.setUTCHours(23, 59, 59, 999);
+      if (!dateParam) {
+        return NextResponse.json({ error: "Missing date/time parameters" }, { status: 400 });
+      }
 
-      startUnix = Math.floor(startOfDay.getTime() / 1000);
-      endUnix = Math.floor(endOfDay.getTime() / 1000);
+      // Parse strictly as UTC
+      const targetDate = new Date(`${dateParam}T00:00:00Z`); 
+      mondayUtc = new Date(targetDate);
+
+      if (isWeek) {
+        // Get current week's Mon-Sun date range in UTC
+        const day = targetDate.getUTCDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        
+        mondayUtc.setUTCDate(targetDate.getUTCDate() + diffToMonday);
+        mondayUtc.setUTCHours(0, 0, 0, 0);
+        
+        const sundayUtc = new Date(mondayUtc);
+        sundayUtc.setUTCDate(mondayUtc.getUTCDate() + 6);
+        sundayUtc.setUTCHours(23, 59, 59, 999);
+
+        startUnix = Math.floor(mondayUtc.getTime() / 1000);
+        endUnix = Math.floor(sundayUtc.getTime() / 1000);
+      } else {
+        // Get exact start and end of the specific day in UTC boundaries
+        const startOfDay = new Date(targetDate);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(targetDate);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        startUnix = Math.floor(startOfDay.getTime() / 1000);
+        endUnix = Math.floor(endOfDay.getTime() / 1000);
+      }
     }
 
     // Authenticate User via Supabase

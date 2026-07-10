@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "@upstash/qstash";
 import { getSiteUrl } from "@/lib/get-site-url";
+import prisma from "@/lib/prisma";
 
 // Initialize Clients using Server-Side Environment Variables
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -167,6 +168,19 @@ export async function GET(req: NextRequest) {
     const siteUrl = getSiteUrl(req);
 
     const now = new Date();
+
+    // Prune soft-deleted (cleared) notifications older than 14 days to free up storage
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    try {
+      await prisma.notifications.deleteMany({
+        where: {
+          is_cleared: true,
+          created_at: { lt: fourteenDaysAgo },
+        },
+      });
+    } catch (pruneError) {
+      console.error("[CRON] Failed to prune old cleared notifications:", pruneError);
+    }
     const windowStartUnix = Math.floor((now.getTime() - 5 * 60 * 1000) / 1000);
     const windowEndUnix = Math.floor((now.getTime() + 2 * 60 * 60 * 1000) / 1000);
     

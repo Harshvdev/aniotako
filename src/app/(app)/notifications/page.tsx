@@ -100,6 +100,7 @@ export default async function NotificationsPage() {
     .from("notifications")
     .select("*")
     .eq("user_id", user.id)
+    .eq("is_cleared", false)
     .order("created_at", { ascending: false });
 
   let enrichedNotifications = notifications || [];

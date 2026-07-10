@@ -22,12 +22,14 @@ export async function GET(req: Request) {
       .from("notifications")
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("is_read", false);
+      .eq("is_read", false)
+      .eq("is_cleared", false);
 
     let query = supabase
       .from("notifications")
       .select("*")
       .eq("user_id", user.id)
+      .eq("is_cleared", false)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -93,9 +95,12 @@ export async function DELETE(req: Request) {
 
     lastClearedAt.set(user.id, Date.now());
 
-    await prisma.notifications.deleteMany({
+    await prisma.notifications.updateMany({
       where: {
         user_id: user.id,
+      },
+      data: {
+        is_cleared: true,
       },
     });
 

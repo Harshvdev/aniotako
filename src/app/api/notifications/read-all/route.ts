@@ -12,6 +12,7 @@ export async function PATCH(req: Request) {
       where: {
         user_id: user.id,
         is_read: false,
+        is_cleared: false,
       },
       data: {
         is_read: true,

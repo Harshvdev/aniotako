@@ -791,14 +791,18 @@ export async function GET(req: NextRequest) {
         .select("user_id, notification_format, timezone")
         .in("user_id", allWatchingUserIds);
 
-      const airedEventIds = airedEvents.map((e: any) => e.id);
       const { data: existingNotifs } = await supabase
         .from("notifications")
-        .select("user_id, notification_event_id")
-        .in("notification_event_id", airedEventIds);
+        .select("user_id, notification_event_id, mal_id, episode_number")
+        .in("user_id", allWatchingUserIds)
+        .gte("created_at", sevenDaysAgo);
 
-      const existingSet = new Set<string>(
+      const existingEventSet = new Set<string>(
         existingNotifs?.map((n: any) => `${n.user_id}:${n.notification_event_id}`) ?? []
+      );
+
+      const existingEpisodeSet = new Set<string>(
+        existingNotifs?.map((n: any) => `${n.user_id}:${n.mal_id}:${n.episode_number}`) ?? []
       );
 
       const episodeEventMap = new Map<string, { format: string; event: any }[]>();
@@ -888,8 +892,15 @@ export async function GET(req: NextRequest) {
 
           const { resolvedEvent } = resolved;
           const dupKey = `${watcher.user_id}:${resolvedEvent.id}`;
-          if (existingSet.has(dupKey)) continue;
-          existingSet.add(dupKey);
+          if (existingEventSet.has(dupKey)) continue;
+
+          // Catch-up fallback guard: Do not send a delayed notification if the user has
+          // already received a notification for this episode in any other format.
+          const episodeDupKey = `${watcher.user_id}:${malId}:${resolvedEvent.episode_number}`;
+          if (existingEpisodeSet.has(episodeDupKey)) continue;
+
+          existingEventSet.add(dupKey);
+          existingEpisodeSet.add(episodeDupKey);
 
           notificationsToInsertDirect.push({
             user_id: watcher.user_id,

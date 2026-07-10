@@ -74,12 +74,16 @@ async function handler(req: Request) {
     let liveShowData = null;
 
     if (Array.isArray(timetableShows)) {
-      // Find the entry that matches the anime identifier and the requested format
+      // Find the entry that matches the anime identifier, the requested format, and the episode number
       liveShowData = timetableShows.find((show: any) => {
         const matchesRoute = route ? show.route === route : false;
         const matchesTitle = show.title === title;
         const matchesFormat = show.airType === format;
-        return (matchesRoute || matchesTitle) && matchesFormat;
+        
+        const showEp = show.episodeNumber ?? show.rawEpisodeNumber ?? show.subEpisodeNumber ?? show.dubEpisodeNumber;
+        const matchesEpisode = episode && showEp ? Number(showEp) === Number(episode) : true;
+        
+        return (matchesRoute || matchesTitle) && matchesFormat && matchesEpisode;
       });
 
       // Fallback: match without format if format-specific search yields nothing
@@ -87,7 +91,11 @@ async function handler(req: Request) {
         liveShowData = timetableShows.find((show: any) => {
           const matchesRoute = route ? show.route === route : false;
           const matchesTitle = show.title === title;
-          return matchesRoute || matchesTitle;
+          
+          const showEp = show.episodeNumber ?? show.rawEpisodeNumber ?? show.subEpisodeNumber ?? show.dubEpisodeNumber;
+          const matchesEpisode = episode && showEp ? Number(showEp) === Number(episode) : true;
+          
+          return (matchesRoute || matchesTitle) && matchesEpisode;
         });
       }
     }

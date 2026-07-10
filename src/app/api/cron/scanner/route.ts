@@ -242,6 +242,7 @@ export async function GET(req: NextRequest) {
         title_romaji,
         title_native,
         anilist_raw,
+        poster_url,
         airing_status
       `)
       .not("anilist_id", "is", null)
@@ -262,6 +263,7 @@ export async function GET(req: NextRequest) {
 
     const watchedAnilistIds = new Set<number>();
     const anilistToMalMap = new Map<number, number>();
+    const malToPosterUrlMap = new Map<number, string | null>();
     const titleToAnilistIdMap = new Map<string, number>();
 
     const addWatchedTitle = (title: unknown, anilistId: number) => {
@@ -283,7 +285,10 @@ export async function GET(req: NextRequest) {
 
       if (Number.isFinite(anilistId)) {
         watchedAnilistIds.add(anilistId);
-        if (malId) anilistToMalMap.set(anilistId, malId);
+        if (malId) {
+          anilistToMalMap.set(anilistId, malId);
+          malToPosterUrlMap.set(malId, row.poster_url ?? null);
+        }
 
         addWatchedTitle(row.title, anilistId);
         addWatchedTitle(row.title_english, anilistId);
@@ -518,6 +523,7 @@ export async function GET(req: NextRequest) {
             });
           } else {
             // Future episode — QStash schedules delivery at the exact air time.
+            const dbPoster = malId ? malToPosterUrlMap.get(malId) : null;
             candidateQStashMessages.push({
               eventKey,
               url: `${siteUrl}/api/notify`,
@@ -529,7 +535,7 @@ export async function GET(req: NextRequest) {
                 format: fmt.type,
                 scheduled_at: fmt.time,
                 title: payload.title,
-                poster_url: posterUrl,
+                poster_url: dbPoster ?? posterUrl,
               },
               notBefore: fmt.time,
               retries: 2,

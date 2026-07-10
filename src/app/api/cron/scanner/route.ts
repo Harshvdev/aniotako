@@ -355,7 +355,7 @@ export async function GET(req: NextRequest) {
     extendedMatchedShows.forEach((show) => {
       const anilistId = show.parsedAnilistId;
       const malId = anilistToMalMap.get(anilistId) ?? null;
-      const posterUrl = show.imageVersionRoute ? `https://animeschedule.net/images/anime/${show.imageVersionRoute}` : null;
+      const posterUrl = show.imageVersionRoute ? `https://img.animeschedule.net/production/assets/public/img/${show.imageVersionRoute}` : null;
 
       const rawAirAt = toUnix(show.episodeDate ?? show.rawPostDate ?? show.rawAirAt);
       const subAirAt = toUnix(show.subPostDate ?? show.subAirAt ?? show.subEpisodeDateTime) ?? rawAirAt;
@@ -825,7 +825,7 @@ export async function GET(req: NextRequest) {
 
       const historicalMetaMap = new Map<number, { title: string; poster_url: string | null; airing_status: string | null }>();
       // Fetch from ALL mal_ids (including current-scan ones) so we get AniList poster URLs for everyone.
-      // upsertPayloads.poster_url uses animeschedule.net imageVersionRoute which is hotlink-blocked.
+      // upsertPayloads.poster_url uses AnimeSchedule.net imageVersionRoute.
       if (allAiredMalIds.length > 0) {
         const { data: historicalMeta } = await supabase
           .from("anime_metadata")
@@ -879,7 +879,7 @@ export async function GET(req: NextRequest) {
 
         const available = new Map(episodeFormats.map((f) => [f.format, f.event]));
         // For notification inserts, always prefer anime_metadata.poster_url (AniList CDN, publicly
-        // accessible) over the imageVersionRoute URL from upsertPayloads (animeschedule.net, hotlink-blocked).
+        // accessible) over the imageVersionRoute URL from upsertPayloads.
         const dbMeta = historicalMetaMap.get(malId);
         const currentScanPayload = upsertPayloads.find((p: any) => Number(p.mal_id) === malId);
         const animePayload = {

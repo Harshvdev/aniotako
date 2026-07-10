@@ -107,13 +107,14 @@ export default async function NotificationsPage() {
     const malIds = notifications.map(n => n.mal_id);
     const { data: metaData } = await supabase
       .from("anime_metadata")
-      .select("mal_id, title_english, title_romaji")
+      .select("mal_id, title_english, title_romaji, poster_url")
       .in("mal_id", malIds);
 
     enrichedNotifications = notifications.map(notif => {
       const meta = metaData?.find(m => m.mal_id === notif.mal_id);
       return {
         ...notif,
+        poster_url: meta?.poster_url || notif.poster_url,
         anime_metadata: meta ? {
           title_english: meta.title_english,
           title_romaji: meta.title_romaji

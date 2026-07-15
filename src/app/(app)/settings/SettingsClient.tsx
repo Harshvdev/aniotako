@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
+import ConfirmModal from "@/components/ConfirmModal";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -37,6 +38,7 @@ export default function SettingsClient() {
   const [notifyWatchingOnly, setNotifyWatchingOnly] = useState(true);
   const [emailNotify, setEmailNotify] = useState(false);
   const [showAdult, setShowAdult] = useState(false);
+  const [showAdultModalOpen, setShowAdultModalOpen] = useState(false);
   
   // New Preferences
   const [notificationFormat, setNotificationFormat] = useState<"raw" | "sub" | "dub">("sub");
@@ -576,7 +578,16 @@ export default function SettingsClient() {
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">Include explicit genres in search.</p>
             </div>
             <div className="shrink-0">
-              <ToggleSwitch checked={showAdult} onChange={(val) => handleUpdatePref("show_adult", val)} />
+              <ToggleSwitch
+                checked={showAdult}
+                onChange={(val) => {
+                  if (val) {
+                    setShowAdultModalOpen(true);
+                  } else {
+                    handleUpdatePref("show_adult", false);
+                  }
+                }}
+              />
             </div>
           </div>
 
@@ -670,6 +681,20 @@ export default function SettingsClient() {
           </div>
         </div>
       )}
+
+      {/* 18+ Adult Content Warning Modal */}
+      <ConfirmModal
+        isOpen={showAdultModalOpen}
+        onClose={() => setShowAdultModalOpen(false)}
+        onConfirm={() => {
+          setShowAdultModalOpen(false);
+          handleUpdatePref("show_adult", true);
+        }}
+        title="Enable Adult Content (18+)"
+        description="By enabling this option, you confirm and agree that you are at least 18 years of age and legally permitted to view explicit (18+) anime titles and genres."
+        confirmLabel="I Agree, Enable"
+        cancelLabel="Cancel"
+      />
     </div>
   );
 }

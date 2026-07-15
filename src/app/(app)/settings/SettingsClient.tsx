@@ -665,7 +665,7 @@ export default function SettingsClient() {
               <h3 className="text-white font-bold">Delete Account</h3>
               <p className="text-sm text-zinc-400 mt-1">Permanently delete your account and all associated data.</p>
             </div>
-            <button onClick={() => alert("Please contact support to completely delete your account instance.")} className="px-5 py-2.5 bg-zinc-950 text-red-500 hover:text-red-400 font-bold text-sm rounded-xl transition-colors border border-red-900/30">
+            <button onClick={() => alert("Please contact contact.harshvdev@gmail.com to completely delete your account instance.")} className="px-5 py-2.5 bg-zinc-950 text-red-500 hover:text-red-400 font-bold text-sm rounded-xl transition-colors border border-red-900/30">
               Request Deletion
             </button>
           </div>
@@ -682,7 +682,7 @@ export default function SettingsClient() {
         </div>
       )}
 
-      {/* 18+ Adult Content Warning Modal */}
+      {/* 18+ Adult Content Confirmation Modal */}
       <ConfirmModal
         isOpen={showAdultModalOpen}
         onClose={() => setShowAdultModalOpen(false)}
@@ -691,8 +691,30 @@ export default function SettingsClient() {
           handleUpdatePref("show_adult", true);
         }}
         title="Enable Adult Content (18+)"
-        description="By enabling this option, you confirm and agree that you are at least 18 years of age and legally permitted to view explicit (18+) anime titles and genres."
-        confirmLabel="I Agree, Enable"
+        maxWidth="max-w-lg"
+        description={
+          <div className="space-y-3.5 text-xs sm:text-sm text-zinc-300">
+            <p>
+              By enabling this setting, you confirm that you are at least <strong className="text-white">18 years old</strong> (or the age of majority where you live) and legally permitted to view adult material.
+            </p>
+            <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-1.5 text-red-300 text-xs">
+              <p className="font-bold uppercase tracking-wider text-[11px] text-red-400 flex items-center gap-1.5">
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                Content Guidelines &amp; Compliance
+              </p>
+              <p>
+                Because Aniotako retrieves search results dynamically from third-party catalogs (<strong className="text-white">such as AniList.co</strong>), users may not use the Service to search for, save, or share content that is illegal under applicable law.
+              </p>
+            </div>
+            <p className="text-zinc-400 text-xs leading-relaxed">
+              We reserve the right to restrict access to specific search queries or tags to maintain compliance with applicable laws and ensure the safety of the Service.
+            </p>
+            <p className="text-[11px] text-zinc-400">
+              By clicking &quot;Enable 18+&quot;, you agree to our <Link href="/terms" target="_blank" className="text-cyan-400 underline hover:text-cyan-300">Terms of Service</Link> and <Link href="/privacy" target="_blank" className="text-cyan-400 underline hover:text-cyan-300">Privacy Policy</Link>.
+            </p>
+          </div>
+        }
+        confirmLabel="Enable 18+"
         cancelLabel="Cancel"
       />
     </div>

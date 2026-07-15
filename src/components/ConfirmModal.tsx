@@ -8,10 +8,11 @@ interface ConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  description: string;
+  description: React.ReactNode | string;
   confirmLabel?: string;
   cancelLabel?: string;
   isDestructive?: boolean;
+  maxWidth?: string;
 }
 
 export default function ConfirmModal({
@@ -23,6 +24,7 @@ export default function ConfirmModal({
   confirmLabel = "OK",
   cancelLabel = "Cancel",
   isDestructive = false,
+  maxWidth = "max-w-sm",
 }: ConfirmModalProps) {
   // Prevent scrolling when modal is open
   useEffect(() => {
@@ -54,11 +56,11 @@ export default function ConfirmModal({
   return createPortal(
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
       <div 
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95" 
+        className={`w-full ${maxWidth} bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto`} 
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-        <p className="text-sm text-zinc-400 mb-8">{description}</p>
+        <div className="text-sm text-zinc-400 mb-8 space-y-3">{description}</div>
         
         <div className="flex items-center justify-end gap-3">
           <button 

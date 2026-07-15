@@ -7,6 +7,7 @@ import MobileNavDrawer from "@/components/MobileNavDrawer";
 import { TitleLanguageProvider } from "@/lib/TitleLanguageContext";
 import { WatchlistProvider } from "@/lib/WatchlistContext";
 import Logo from "@/components/Logo";
+import Footer from "@/components/Footer";
 
 export default async function AppLayout({
   children,
@@ -45,7 +46,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 pb-20">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 flex flex-col">
       
       <TitleLanguageProvider>
         <WatchlistProvider initialWatchlist={watchlist}>
@@ -91,10 +92,13 @@ export default async function AppLayout({
           </nav>
 
           {/* Page Content injected here */}
-          {children}
+          <main className="flex-1 pb-16">
+            {children}
+          </main>
 
           {user && <GlobalEnrichmentTracker />}
           
+          <Footer />
         </WatchlistProvider>
       </TitleLanguageProvider>
     </div>

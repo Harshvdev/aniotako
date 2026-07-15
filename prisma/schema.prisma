@@ -542,6 +542,7 @@ model anime_metadata {
   @@schema("public")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model api_status {
   api_name      String   @id
   blocked_until DateTime @db.Timestamptz(6)
@@ -549,6 +550,7 @@ model api_status {
   @@schema("public")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model active_api_requests {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   api_name   String
@@ -581,12 +583,12 @@ model notifications {
   episode_number        Int?
   poster_url            String?
   is_read               Boolean?  @default(false)
-  is_cleared            Boolean   @default(false)
   created_at            DateTime? @default(now()) @db.Timestamptz(6)
   created_date          DateTime? @default(dbgenerated("((created_at AT TIME ZONE 'UTC'::text))::date")) @db.Date
   format                String?   @default("sub")
   aired_at              DateTime? @db.Timestamptz(6)
   notification_event_id String?   @db.Uuid
+  is_cleared            Boolean   @default(false)
   users                 users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, notification_event_id], map: "unique_user_event_notification")

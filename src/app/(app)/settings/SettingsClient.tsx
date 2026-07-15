@@ -7,6 +7,7 @@ import Link from "next/link";
 import AsyncButton from "@/components/AsyncButton";
 import { useTitleLanguage } from "@/lib/TitleLanguageContext";
 import ConfirmModal from "@/components/ConfirmModal";
+import { createPortal } from "react-dom";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -66,9 +67,13 @@ export default function SettingsClient() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isPushLoading, setIsPushLoading] = useState(false);
 
-  // Danger Zone
+  // Danger Zone — Delete All Entries
   const [deleteInput, setDeleteInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Danger Zone — Delete Account
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
+  const [isOAuthUser, setIsOAuthUser] = useState(false);
 
   // --- Initial Data Load ---
   useEffect(() => {
@@ -76,6 +81,11 @@ export default function SettingsClient() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push("/login");
       setEmail(user.email || "");
+
+      // Detect OAuth-only accounts (no password identity)
+      const identities = user.identities ?? [];
+      const hasPasswordIdentity = identities.some((id) => id.provider === "email");
+      setIsOAuthUser(!hasPasswordIdentity);
 
       // Parallel extraction: Account profile details + preferences API endpoint
       const [profileSnap, prefsData] = await Promise.all([
@@ -665,8 +675,12 @@ export default function SettingsClient() {
               <h3 className="text-white font-bold">Delete Account</h3>
               <p className="text-sm text-zinc-400 mt-1">Permanently delete your account and all associated data.</p>
             </div>
-            <button onClick={() => alert("Please contact contact.harshvdev@gmail.com to completely delete your account instance.")} className="px-5 py-2.5 bg-zinc-950 text-red-500 hover:text-red-400 font-bold text-sm rounded-xl transition-colors border border-red-900/30">
-              Request Deletion
+            <button
+              id="delete-account-btn"
+              onClick={() => setDeleteAccountModalOpen(true)}
+              className="px-5 py-2.5 bg-zinc-950 text-red-500 hover:bg-red-950/30 hover:text-red-400 font-bold text-sm rounded-xl transition-colors border border-red-900/30 shrink-0"
+            >
+              Delete Account
             </button>
           </div>
 
@@ -681,6 +695,14 @@ export default function SettingsClient() {
           </div>
         </div>
       )}
+
+      {/* Delete Account Modal */}
+      <DeleteAccountModal
+        isOpen={deleteAccountModalOpen}
+        onClose={() => setDeleteAccountModalOpen(false)}
+        userEmail={email}
+        isOAuthUser={isOAuthUser}
+      />
 
       {/* 18+ Adult Content Confirmation Modal */}
       <ConfirmModal
@@ -734,5 +756,253 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
     >
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Delete Account Modal
+// A self-contained modal with its own state for the dangerous account
+// deletion flow. Two paths:
+//   - Email/password accounts: re-verifies password server-side before deletion.
+//   - OAuth accounts: requires typing the email address to confirm.
+// ---------------------------------------------------------------------------
+const CONFIRM_PHRASE = "DELETE MY ACCOUNT";
+
+function DeleteAccountModal({
+  isOpen,
+  onClose,
+  userEmail,
+  isOAuthUser,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  userEmail: string;
+  isOAuthUser: boolean;
+}) {
+  const router = useRouter();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [confirmPhrase, setConfirmPhrase] = useState("");
+  const [credential, setCredential] = useState(""); // password or email
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Reset state every time the modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setTimeout(() => {
+        setStep(1);
+        setConfirmPhrase("");
+        setCredential("");
+        setError("");
+        setIsLoading(false);
+      }, 300);
+    }
+  }, [isOpen]);
+
+  // Lock body scroll
+  useEffect(() => {
+    if (isOpen) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (isOpen) document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
+
+  const phraseMatch = confirmPhrase === CONFIRM_PHRASE;
+
+  const handleDeleteAccount = async () => {
+    setError("");
+    if (!phraseMatch) return;
+    if (!credential.trim()) {
+      setError(isOAuthUser ? "Please enter your email address." : "Please enter your password.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isOAuthUser
+            ? { isOAuthUser: true, confirmEmail: credential.trim() }
+            : { isOAuthUser: false, password: credential }
+        ),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to delete account.");
+        return;
+      }
+
+      // Clear all local storage keys belonging to this app
+      const keysToRemove = ["aniotako_view", "aniotako_sort", "aniotako_timezone"];
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // Sign out client-side (session is already invalidated server-side)
+      const supabase = createClient();
+      await supabase.auth.signOut();
+
+      onClose();
+      router.push("/login?deleted=1");
+    } catch (e: any) {
+      setError(e.message || "Unexpected error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-zinc-900 border border-red-900/40 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-5">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Delete Account</h3>
+            <p className="text-xs text-zinc-500 mt-0.5">This action is permanent and cannot be undone.</p>
+          </div>
+        </div>
+
+        {/* What will be deleted */}
+        <div className="p-3.5 bg-red-950/30 border border-red-900/40 rounded-2xl mb-5 space-y-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-red-400 mb-2">Everything below will be permanently deleted:</p>
+          {[
+            "Your entire watchlist",
+            "All notifications and history",
+            "Push notification subscriptions",
+            "All preferences and settings",
+            "Your account and login credentials",
+          ].map((item) => (
+            <div key={item} className="flex items-center gap-2 text-xs text-red-300">
+              <svg className="w-3 h-3 shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {item}
+            </div>
+          ))}
+        </div>
+
+        {/* Step 1: Type confirmation phrase */}
+        <div className="space-y-2 mb-4">
+          <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            Type{" "}
+            <span className="text-red-400 font-mono tracking-normal normal-case">{CONFIRM_PHRASE}</span>{" "}
+            to confirm
+          </label>
+          <input
+            id="delete-account-phrase-input"
+            type="text"
+            value={confirmPhrase}
+            onChange={(e) => setConfirmPhrase(e.target.value)}
+            placeholder={CONFIRM_PHRASE}
+            autoComplete="off"
+            className={`w-full bg-zinc-950 border rounded-xl px-4 py-2.5 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-colors ${
+              confirmPhrase.length > 0 && !phraseMatch
+                ? "border-red-700/60 focus:border-red-500"
+                : phraseMatch
+                ? "border-emerald-700/60 focus:border-emerald-500"
+                : "border-zinc-800 focus:border-zinc-600"
+            }`}
+          />
+        </div>
+
+        {/* Step 2: Identity verification (visible once phrase matches) */}
+        <div
+          className={`space-y-2 mb-5 transition-all duration-300 ${
+            phraseMatch ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
+          }`}
+        >
+          {isOAuthUser ? (
+            <>
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                Confirm your email address
+              </label>
+              <input
+                id="delete-account-email-input"
+                type="email"
+                value={credential}
+                onChange={(e) => { setCredential(e.target.value); setError(""); }}
+                placeholder={userEmail}
+                autoComplete="email"
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-red-600 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-colors"
+              />
+              <p className="text-[11px] text-zinc-500">Enter the email address associated with your account to confirm deletion.</p>
+            </>
+          ) : (
+            <>
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                Enter your password to confirm
+              </label>
+              <input
+                id="delete-account-password-input"
+                type="password"
+                value={credential}
+                onChange={(e) => { setCredential(e.target.value); setError(""); }}
+                placeholder="Your current password"
+                autoComplete="current-password"
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-red-600 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-colors"
+              />
+              <p className="text-[11px] text-zinc-500">Your password is verified server-side and never stored.</p>
+            </>
+          )}
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="flex items-center gap-2 p-3 mb-4 bg-red-950/40 border border-red-500/30 rounded-xl animate-in fade-in slide-in-from-top-1">
+            <svg className="w-4 h-4 shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <p className="text-xs text-red-300 font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-5 py-2.5 text-sm font-semibold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            id="delete-account-confirm-btn"
+            onClick={handleDeleteAccount}
+            disabled={!phraseMatch || !credential.trim() || isLoading}
+            className="px-5 py-2.5 text-sm font-bold text-white rounded-full transition-all bg-red-600 hover:bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.25)] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none flex items-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              "Delete My Account"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

@@ -109,8 +109,14 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Forward user headers to downstream pages/routes
+  // Forward user headers to downstream pages/routes.
+  // SECURITY: Explicitly delete any inbound spoofed values BEFORE setting them
+  // from the verified Supabase session. Without this, a client could inject
+  // x-user-id / x-auth-checked headers and bypass auth checks in API routes.
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-auth-checked");
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-email");
   requestHeaders.set("x-auth-checked", "true");
   if (user) {
     requestHeaders.set("x-user-id", (user as any).id);

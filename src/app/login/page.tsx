@@ -51,10 +51,21 @@ function LoginForm() {
     }
   };
 
+  const isDeleted = searchParams.get("deleted") === "1";
+
   return (
     <div className="w-full max-w-md bg-zinc-900/50 border border-zinc-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
       <h1 className="text-2xl font-bold text-white mb-2 text-center">Welcome back</h1>
       <p className="text-zinc-400 text-sm text-center mb-8">Sign in to continue to your watchlist.</p>
+
+      {isDeleted && (
+        <div className="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3.5 rounded-xl text-sm mb-5 animate-in fade-in slide-in-from-top-2">
+          <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Your account has been permanently deleted. All data has been removed.</span>
+        </div>
+      )}
 
       <form onSubmit={handleLogin} className="space-y-4">
         {error && (

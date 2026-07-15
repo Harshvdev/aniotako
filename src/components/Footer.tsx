@@ -6,62 +6,51 @@ import Logo from "@/components/Logo";
 
 export default function Footer() {
   return (
-    <footer className="mt-auto border-t border-zinc-800/80 bg-[#09090b]/90 text-zinc-400 py-12 px-4 sm:px-6 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-8">
+    <footer className="hidden md:block relative w-full border-t border-zinc-900 bg-zinc-950/60 text-zinc-400 py-6 px-4 sm:px-6 md:px-8 backdrop-blur-md overflow-hidden">
+      {/* Background Subtle Radial Gradient Glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,70,239,0.02),rgba(6,182,212,0.01),transparent_70%)] pointer-events-none" />
+      
+      {/* Top Border Gradient Glow Line */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-zinc-800/50 to-transparent" />
+
+      <div className="max-w-7xl mx-auto relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         
-        {/* Left column: Logo & Brief */}
-        <div className="max-w-sm space-y-3">
-          <Link href="/" className="inline-flex items-center gap-3 group">
-            <Logo showText={true} size={36} className="group-hover:scale-105 transition-transform" />
+        {/* Left Side: Brand, Copyright & Small Disclaimer */}
+        <div className="flex flex-col gap-2 max-w-2xl">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="inline-flex items-center gap-2 group shrink-0">
+              <Logo
+                showText={true}
+                size={28}
+                className="group-hover:scale-105 transition-transform duration-300"
+              />
+            </Link>
+            <span className="text-zinc-800">|</span>
+            <span className="text-[11px] text-zinc-500">
+              © {new Date().getFullYear()} Aniotako. All rights reserved.
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-600 leading-normal">
+            Aniotako is a personal tracking application. Metadata and artwork are retrieved from external APIs. We do not host, stream, or distribute any media files.
+          </p>
+        </div>
+
+        {/* Right Side: Links & Operation Pill */}
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs shrink-0 self-start md:self-center">
+          <Link href="/terms" className="hover:text-cyan-400 transition-colors duration-200">
+            Terms of Service
           </Link>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Aniotako is a personal anime watchlist tracker and airing scheduler. Designed for anime enthusiasts to organize their watching progress and get real-time notifications in their localized timezone.
-          </p>
-          <p className="text-[11px] text-zinc-500">
-            © {new Date().getFullYear()} Aniotako. All rights reserved. Built and operated from India.
-          </p>
-        </div>
-
-        {/* Middle column: Quick Links */}
-        <div className="flex flex-col sm:flex-row gap-8 sm:gap-16">
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300">Navigation</h4>
-            <ul className="space-y-1.5 text-xs text-zinc-400">
-              <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-              <li><Link href="/watchlist" className="hover:text-white transition-colors">Watchlist</Link></li>
-              <li><Link href="/search" className="hover:text-white transition-colors">Search Anime</Link></li>
-              <li><Link href="/calendar" className="hover:text-white transition-colors">Airing Calendar</Link></li>
-              <li><Link href="/import" className="hover:text-white transition-colors">Import MAL / AniList</Link></li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300">Legal & Safety</h4>
-            <ul className="space-y-1.5 text-xs text-zinc-400">
-              <li><Link href="/terms" className="hover:text-cyan-400 transition-colors">Terms of Service</Link></li>
-              <li><Link href="/privacy" className="hover:text-cyan-400 transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/settings" className="hover:text-white transition-colors">Content & Adult Settings</Link></li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Right column: Third-Party Data & Caching Notice */}
-        <div className="max-w-md bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 space-y-2 text-[11px] text-zinc-400 leading-relaxed shadow-sm">
-          <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
-            <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Third-Party Data &amp; Caching Notice</span>
-          </div>
-          <p>
-            Aniotako is a personal anime tracking and schedule countdown application. Anime metadata, schedules, and artwork are dynamically retrieved from external third-party APIs (<span className="text-zinc-300">such as AniList and MyAnimeList</span>) and temporarily cached to improve loading speeds.
-          </p>
-          <p>
-            Aniotako does not host, stream, or distribute any video or media files. Adult content (18+) is disabled by default and requires voluntary opt-in within Account Settings.
-          </p>
+          <Link href="/privacy" className="hover:text-cyan-400 transition-colors duration-200">
+            Privacy Policy
+          </Link>
+          <span className="text-[10px] bg-zinc-900/60 text-zinc-500 px-2.5 py-0.5 rounded-full border border-zinc-800/80">
+            India
+          </span>
         </div>
 
       </div>
     </footer>
   );
 }
+
+

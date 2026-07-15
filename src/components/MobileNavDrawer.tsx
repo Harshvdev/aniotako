@@ -40,18 +40,44 @@ export default function MobileNavDrawer() {
               </button>
             </div>
 
-            <div className="flex flex-col p-4 gap-2 overflow-y-auto custom-scrollbar">
-              <Link href="/" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Home</Link>
-              <Link href="/watchlist" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Watchlist</Link>
-              <Link href="/search" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Search</Link>
-              <Link href="/calendar" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-cyan-400 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Calendar</Link>
-              <Link href="/import" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Import</Link>
-              <Link href="/notifications" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Notifications</Link>
-              
-              <div className="border-t border-zinc-800 my-2 mx-2 shrink-0" />
-              
-              <Link href="/profile" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">My Profile</Link>
-              <Link href="/settings" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Settings</Link>
+            <div className="flex-1 flex flex-col justify-between overflow-y-auto custom-scrollbar">
+              <div className="flex flex-col p-4 gap-2">
+                <Link href="/" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Home</Link>
+                <Link href="/watchlist" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Watchlist</Link>
+                <Link href="/search" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Search</Link>
+                <Link href="/calendar" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Calendar</Link>
+                <Link href="/import" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Import</Link>
+                <Link href="/notifications" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Notifications</Link>
+                
+                <div className="border-t border-zinc-800 my-2 mx-2 shrink-0" />
+                
+                <Link href="/profile" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">My Profile</Link>
+                <Link href="/settings" onClick={() => setIsOpen(false)} className="px-4 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors">Settings</Link>
+              </div>
+
+              {/* Mobile Sidebar Footer */}
+              <div className="p-6 border-t border-zinc-900 bg-zinc-950/40 space-y-4 shrink-0">
+                <div className="flex flex-col gap-1 text-[11px] text-zinc-500">
+                  <p>© {new Date().getFullYear()} Aniotako. All rights reserved.</p>
+                  <p className="text-[10px] text-zinc-600 leading-normal">
+                    Aniotako is a personal tracking application. Metadata and artwork are retrieved from external APIs. We do not host, stream, or distribute any media files.
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <div className="flex gap-4">
+                    <Link href="/terms" onClick={() => setIsOpen(false)} className="hover:text-cyan-400 transition-colors">
+                      Terms
+                    </Link>
+                    <Link href="/privacy" onClick={() => setIsOpen(false)} className="hover:text-cyan-400 transition-colors">
+                      Privacy
+                    </Link>
+                  </div>
+                  <span className="text-[10px] bg-zinc-900/60 text-zinc-500 px-2 py-0.5 rounded-full border border-zinc-800/80">
+                    India
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>,

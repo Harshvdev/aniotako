@@ -267,9 +267,11 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                             Episode {notif.episode_number ?? "?"} ({(notif.format ?? "sub").toUpperCase()})
                           </p>
                           {/* Display localized exact air and dispatch times */}
-                          <p className="text-sm text-zinc-400 mt-0.5">
-                            Aired: {notif.aired_at ? formatAbsoluteTime(notif.aired_at) : "Unknown"}
-                          </p>
+                          {process.env.NODE_ENV === "development" && (
+                            <p className="text-sm text-zinc-400 mt-0.5">
+                              Aired: {notif.aired_at ? formatAbsoluteTime(notif.aired_at) : "Unknown"}
+                            </p>
+                          )}
                           <p className="text-xs text-zinc-500 mt-0.5">
                             Notified: {notif.created_at ? formatAbsoluteTime(notif.created_at) : "Unknown"}
                           </p>

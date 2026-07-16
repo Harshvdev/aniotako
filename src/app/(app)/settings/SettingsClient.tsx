@@ -446,8 +446,8 @@ export default function SettingsClient() {
               <h3 className="text-white font-bold text-sm sm:text-base">Notification Format</h3>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">
                 {notificationFormat === "raw" && "Notify when episode airs in Japan (raw broadcast)"}
-                {notificationFormat === "sub" && "Notify when subtitles are available on streaming platforms (recommended)"}
-                {notificationFormat === "dub" && "Notify when English dub releases"}
+                {notificationFormat === "sub" && "Notify when subtitles are available on streaming platforms. If a sub is not found, it will send raw notifications."}
+                {notificationFormat === "dub" && "Notify when English dub releases. If a dub is not found, it will send sub notifications."}
               </p>
               <div className="h-4 mt-1">
                 {formatSuccessMsg && (

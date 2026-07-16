@@ -206,7 +206,7 @@ export default function NotificationBell() {
                           <p className="font-semibold text-fuchsia-400">
                             Episode {notif.episode_number ?? "?"} ({notif.format?.toUpperCase() ?? "SUB"})
                           </p>
-                          {notif.aired_at && (
+                          {process.env.NODE_ENV === "development" && notif.aired_at && (
                             <p className="text-[11px] text-zinc-500">
                               Aired on {new Date(notif.aired_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(notif.aired_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>

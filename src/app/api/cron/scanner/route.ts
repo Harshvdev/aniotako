@@ -265,7 +265,7 @@ export async function GET(req: NextRequest) {
     // Fetch all watching entries including user_id for the scanner-direct fallback
     const { data: watchingEntries, error: watchError } = await supabase
       .from("watchlist_entries")
-      .select("user_id, mal_id")
+      .select("user_id, mal_id, created_at")
       .eq("status", "watching");
 
     const watchingMalIds = new Set<number>();
@@ -678,6 +678,13 @@ export async function GET(req: NextRequest) {
           }
           if (!chosen) continue;
 
+          // Check if the episode aired after the watchlist entry was created
+          const entryCreatedAt = new Date(watcher.created_at).getTime();
+          const episodeAiredAt = new Date(chosen.data.airedAt).getTime();
+          if (episodeAiredAt < entryCreatedAt) {
+            continue;
+          }
+
           const eventId = directEventIdMap.get(chosen.data.eventKey);
           if (!eventId) continue;
           const dupKey = `${watcher.user_id}:${eventId}`;
@@ -911,6 +918,14 @@ export async function GET(req: NextRequest) {
           if (!resolved) continue;
 
           const { resolvedEvent } = resolved;
+
+          // Check if the episode aired after the watchlist entry was created
+          const entryCreatedAt = new Date(watcher.created_at).getTime();
+          const episodeAiredAt = new Date(resolvedEvent.aired_at).getTime();
+          if (episodeAiredAt < entryCreatedAt) {
+            continue;
+          }
+
           const dupKey = `${watcher.user_id}:${resolvedEvent.id}`;
           if (existingEventSet.has(dupKey)) continue;
 

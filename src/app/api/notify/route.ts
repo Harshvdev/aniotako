@@ -224,7 +224,7 @@ async function handler(req: Request) {
     // Fetch all users watching this anime
     const { data: watchlistUsers, error: watchlistError } = await supabaseAdmin
       .from("watchlist_entries")
-      .select("user_id, title, title_english")
+      .select("user_id, title, title_english, created_at")
       .eq("mal_id", mal_id)
       .eq("status", "watching");
 
@@ -296,6 +296,7 @@ async function handler(req: Request) {
           user_id: w.user_id,
           title: w.title,
           title_english: w.title_english,
+          created_at: w.created_at,
           user_preferences: {
             notification_format: pref?.notification_format ?? "sub",
             timezone: pref?.timezone,
@@ -333,6 +334,13 @@ async function handler(req: Request) {
       const formatLabel = resolveFormatDelivery(userPref, format);
       if (!formatLabel) {
         // This event format is not in the user's delivery chain — skip
+        continue;
+      }
+
+      // Check if the episode aired after the watchlist entry was created
+      const entryCreatedAt = new Date(user.created_at).getTime();
+      const episodeAiredAt = new Date(liveTimestampStr!).getTime();
+      if (episodeAiredAt < entryCreatedAt) {
         continue;
       }
 

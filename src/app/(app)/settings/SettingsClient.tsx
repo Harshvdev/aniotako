@@ -687,6 +687,42 @@ export default function SettingsClient() {
         </div>
       </section>
 
+      {/* --- ABOUT & LEGAL SECTION --- */}
+      <section className="mt-12">
+        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">About & Legal</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+            <div>
+              <h3 className="text-white font-bold text-base flex items-center gap-2">
+                Aniotako
+                <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-700 font-mono font-medium">v1.0.0</span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1">© {new Date().getFullYear()} Aniotako. All rights reserved.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link 
+                href="/terms" 
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs rounded-xl border border-zinc-700 transition-colors"
+              >
+                Terms of Service
+              </Link>
+              <Link 
+                href="/privacy" 
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs rounded-xl border border-zinc-700 transition-colors"
+              >
+                Privacy Policy
+              </Link>
+            </div>
+          </div>
+
+          <div className="pt-4">
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Aniotako is a personal anime tracking application. Metadata and artwork are retrieved from external APIs (MyAnimeList and AniList). We do not host, stream, or distribute any media files.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Floating Toast */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">

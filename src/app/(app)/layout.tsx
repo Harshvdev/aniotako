@@ -7,8 +7,8 @@ import MobileNavDrawer from "@/components/MobileNavDrawer";
 import { TitleLanguageProvider } from "@/lib/TitleLanguageContext";
 import { WatchlistProvider } from "@/lib/WatchlistContext";
 import Logo from "@/components/Logo";
-import Footer from "@/components/Footer";
 
+// Force HMR refresh
 export default async function AppLayout({
   children,
 }: {
@@ -97,8 +97,6 @@ export default async function AppLayout({
           </main>
 
           {user && <GlobalEnrichmentTracker />}
-          
-          <Footer />
         </WatchlistProvider>
       </TitleLanguageProvider>
     </div>

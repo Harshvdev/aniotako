@@ -56,26 +56,19 @@ export default function MobileNavDrawer() {
               </div>
 
               {/* Mobile Sidebar Footer */}
-              <div className="p-6 border-t border-zinc-900 bg-zinc-950/40 space-y-4 shrink-0">
-                <div className="flex flex-col gap-1 text-[11px] text-zinc-500">
-                  <p>© {new Date().getFullYear()} Aniotako. All rights reserved.</p>
-                  <p className="text-[10px] text-zinc-600 leading-normal">
-                    Aniotako is a personal tracking application. Metadata and artwork are retrieved from external APIs. We do not host, stream, or distribute any media files.
-                  </p>
-                </div>
-                
+              <div className="p-4 border-t border-zinc-900 bg-zinc-950/40 space-y-3 shrink-0">
                 <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <div className="flex gap-4">
-                    <Link href="/terms" onClick={() => setIsOpen(false)} className="hover:text-cyan-400 transition-colors">
-                      Terms
+                  <div className="flex gap-4 font-medium">
+                    <Link href="/terms" onClick={() => setIsOpen(false)} className="hover:text-red-400 transition-colors">
+                      Terms of Service
                     </Link>
-                    <Link href="/privacy" onClick={() => setIsOpen(false)} className="hover:text-cyan-400 transition-colors">
-                      Privacy
+                    <Link href="/privacy" onClick={() => setIsOpen(false)} className="hover:text-red-400 transition-colors">
+                      Privacy Policy
                     </Link>
                   </div>
-                  <span className="text-[10px] bg-zinc-900/60 text-zinc-500 px-2 py-0.5 rounded-full border border-zinc-800/80">
-                    India
-                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500 font-medium">
+                  © {new Date().getFullYear()} Aniotako
                 </div>
               </div>
             </div>

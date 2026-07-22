@@ -22,15 +22,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   try {
-    // Fetch cached anime metadata from database
-    const cachedAnime = await prisma.anime_metadata.findMany({
-      select: {
-        mal_id: true,
-        airing_status: true,
-        cached_at: true,
-        anilist_raw: true,
-      },
-    });
+    // Fetch cached anime metadata from database with a 3-second build timeout fallback
+    const cachedAnime = await Promise.race([
+      prisma.anime_metadata.findMany({
+        select: {
+          mal_id: true,
+          airing_status: true,
+          cached_at: true,
+          anilist_raw: true,
+        },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Database query timeout generating sitemap")), 3000)
+      ),
+    ]);
 
     // Sort in memory to avoid complex/slow dynamic json parsing in db query
     const sortedAnime = cachedAnime.sort((a, b) => {

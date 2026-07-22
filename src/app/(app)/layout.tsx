@@ -46,7 +46,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-fuchsia-500/30 flex flex-col">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-red-500/30 flex flex-col">
       
       <TitleLanguageProvider>
         <WatchlistProvider initialWatchlist={watchlist}>
@@ -62,7 +62,7 @@ export default async function AppLayout({
                   <Logo
                     showText={true}
                     size={42}
-                    textClassName="hidden md:block transition-colors group-hover:text-fuchsia-400"
+                    textClassName="hidden md:block transition-colors group-hover:text-red-400"
                     className="group-hover:scale-105 transition-transform"
                   />
                 </Link>

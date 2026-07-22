@@ -146,11 +146,11 @@ export default function ImportClient() {
         <div
           onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
           className={`border-2 border-dashed rounded-3xl p-12 text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center min-h-[300px] ${
-            isDragging ? "border-fuchsia-500 bg-fuchsia-500/10 scale-[1.02]" : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-500 hover:bg-zinc-800/50"
+            isDragging ? "border-red-500 bg-red-500/10 scale-[1.02]" : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-500 hover:bg-zinc-800/50"
           }`}
           onClick={() => fileInputRef.current?.click()}
         >
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 transition-colors ${isDragging ? "bg-fuchsia-500/20 text-fuchsia-400" : "bg-zinc-800 text-zinc-400"}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 transition-colors ${isDragging ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-400"}`}>
             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Drag & Drop your XML file</h3>
@@ -163,7 +163,7 @@ export default function ImportClient() {
       {parsedData && counts && !successMsg && (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 shadow-xl animate-in fade-in slide-in-from-bottom-4">
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 rounded bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center">
+            <span className="w-8 h-8 rounded bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
             </span>
             File Parsed Successfully
@@ -182,10 +182,10 @@ export default function ImportClient() {
             <div className="mb-6">
               <div className="flex justify-between text-xs font-bold text-zinc-400 mb-2 uppercase tracking-widest">
                 <span>Importing to Database...</span>
-                <span className="text-cyan-400">{progress}%</span>
+                <span className="text-red-400">{progress}%</span>
               </div>
               <div className="w-full bg-zinc-950 rounded-full h-3 border border-zinc-800 overflow-hidden">
-                <div className="bg-gradient-to-r from-fuchsia-500 to-cyan-500 h-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
+                <div className="bg-gradient-to-r from-red-600 to-rose-500 h-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}

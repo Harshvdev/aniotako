@@ -8,7 +8,7 @@ export default function Footer() {
   return (
     <footer className="hidden md:block relative w-full border-t border-zinc-900 bg-zinc-950/60 text-zinc-400 py-6 px-4 sm:px-6 md:px-8 backdrop-blur-md overflow-hidden">
       {/* Background Subtle Radial Gradient Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,70,239,0.02),rgba(6,182,212,0.01),transparent_70%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(220,38,38,0.03),rgba(244,63,94,0.02),transparent_70%)] pointer-events-none" />
       
       {/* Top Border Gradient Glow Line */}
       <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-zinc-800/50 to-transparent" />

@@ -177,7 +177,7 @@ export default function NotificationsClient({ initialNotifications }: Props) {
             {hasUnread && (
               <button 
                 onClick={handleMarkAllAsRead}
-                className="px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors shadow-lg flex items-center gap-2"
+                className="px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-bold text-red-400 hover:text-red-300 hover:bg-zinc-800 transition-colors shadow-lg flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                 Mark all as read
@@ -232,7 +232,7 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                       onClick={() => handleNotificationClick(notif)}
                       className={`group w-full flex items-start sm:items-center gap-4 p-4 rounded-2xl border transition-all text-left ${
                         !notif.is_read 
-                          ? "bg-zinc-800/40 border-fuchsia-500/30 shadow-[0_0_15px_rgba(217,70,239,0.05)] hover:bg-zinc-800/60 hover:border-fuchsia-500/50" 
+                          ? "bg-zinc-800/40 border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.05)] hover:bg-zinc-800/60 hover:border-red-500/50" 
                           : "bg-zinc-900/40 border-zinc-800 hover:bg-zinc-800/60"
                       }`}
                     >
@@ -244,7 +244,7 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                           <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-600">NO IMG</div>
                         )}
                         {!notif.is_read && (
-                          <div className="absolute top-0 right-0 w-3 h-3 bg-fuchsia-500 rounded-bl-lg"></div>
+                          <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-bl-lg"></div>
                         )}
                       </div>
                       
@@ -260,9 +260,9 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                           </h3>
                           {/* Episode + format badge */}
                           <p className={`text-sm font-semibold mt-0.5 ${
-                            notif.format === "dub" ? "text-cyan-400" :
+                            notif.format === "dub" ? "text-rose-400" :
                             notif.format === "raw" ? "text-amber-400" :
-                            "text-fuchsia-400"
+                            "text-red-400"
                           }`}>
                             Episode {notif.episode_number ?? "?"} ({(notif.format ?? "sub").toUpperCase()})
                           </p>
@@ -278,10 +278,10 @@ export default function NotificationsClient({ initialNotifications }: Props) {
                         </div>
                         
                         <div className="shrink-0 flex items-center gap-3">
-                          <span className={`text-[11px] font-bold uppercase tracking-wider ${!notif.is_read ? "text-fuchsia-400" : "text-zinc-500"}`}>
+                          <span className={`text-[11px] font-bold uppercase tracking-wider ${!notif.is_read ? "text-red-400" : "text-zinc-500"}`}>
                             {formatRelativeTime(notif.created_at)}
                           </span>
-                          <div className="w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-zinc-500 group-hover:text-cyan-400 group-hover:bg-cyan-500/10 transition-all">
+                          <div className="w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-zinc-500 group-hover:text-red-400 group-hover:bg-red-500/10 transition-all">
                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                           </div>
                         </div>

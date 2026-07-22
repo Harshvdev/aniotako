@@ -60,7 +60,7 @@ export default function EditProfileModal({ currentName }: { currentName: string 
               <button 
                 onClick={handleSave}
                 disabled={isSaving || !name.trim()}
-                className="px-6 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white text-sm font-bold shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50 hover:opacity-90 transition-all"
+                className="px-6 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white text-sm font-bold shadow-[0_0_15px_rgba(220,38,38,0.3)] disabled:opacity-50 hover:opacity-90 transition-all"
               >
                 {isSaving ? "Saving..." : "Save"}
               </button>

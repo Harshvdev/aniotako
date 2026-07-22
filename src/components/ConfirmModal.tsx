@@ -74,7 +74,7 @@ export default function ConfirmModal({
             className={`px-5 py-2.5 text-sm font-bold text-white rounded-full transition-all ${
               isDestructive 
                 ? "bg-red-600 hover:bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" 
-                : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 shadow-[0_0_15px_rgba(217,70,239,0.3)]"
+                : "bg-gradient-to-r from-red-600 to-rose-600 shadow-[0_0_15px_rgba(220,38,38,0.3)]"
             }`}
           >
             {confirmLabel}

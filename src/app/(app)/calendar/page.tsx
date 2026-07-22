@@ -89,8 +89,8 @@ export default async function CalendarPage() {
       </div>
       
       {/* Decorative floating elements */}
-      <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-fuchsia-500 to-cyan-500 rounded-2xl opacity-10 blur-xl pointer-events-none" />
-      <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-cyan-500 rounded-full opacity-5 blur-xl pointer-events-none" />
+      <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-red-500 to-rose-500 rounded-2xl opacity-10 blur-xl pointer-events-none" />
+      <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-rose-500 rounded-full opacity-5 blur-xl pointer-events-none" />
     </div>
   );
 

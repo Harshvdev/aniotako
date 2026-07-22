@@ -2,6 +2,7 @@ import { createClient, getServerUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import EditProfileModal from "./EditProfileModal";
+import UserAvatar from "@/components/UserAvatar";
 
 export const dynamic = 'force-dynamic';
 
@@ -113,9 +114,7 @@ export default async function ProfilePage() {
           
           {/* Avatar */}
           <div className="shrink-0 relative">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-tr from-cyan-600 to-fuchsia-600 flex items-center justify-center text-white font-black text-5xl md:text-6xl shadow-[0_0_30px_rgba(217,70,239,0.4)] border-4 border-zinc-900">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
+            <UserAvatar initial={displayName} size="xl" />
           </div>
 
           {/* User Info */}
@@ -194,7 +193,7 @@ export default async function ProfilePage() {
                     </div>
                     <div className="w-full relative bg-zinc-800 rounded-t-sm overflow-hidden h-full flex items-end">
                       <div 
-                        className="w-full bg-gradient-to-t from-fuchsia-600 to-cyan-400 rounded-t-sm transition-all duration-1000 ease-out"
+                        className="w-full bg-gradient-to-t from-red-600 to-rose-400 rounded-t-sm transition-all duration-1000 ease-out"
                         style={{ height: `${heightPercentage}%`, minHeight: count > 0 ? '4px' : '0' }}
                       />
                     </div>

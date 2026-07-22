@@ -309,7 +309,7 @@ export default function SearchClient() {
                   onClick={() => handleGenreToggle(g)}
                   className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
                     selectedGenres.includes(g)
-                      ? "bg-fuchsia-600 text-white border border-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.4)]"
+                      ? "bg-red-600 text-white border border-red-500 shadow-[0_0_10px_rgba(220,38,38,0.4)]"
                       : "bg-zinc-850 border border-zinc-800 text-zinc-400 hover:border-zinc-650 hover:text-zinc-200"
                   }`}
                 >
@@ -370,7 +370,7 @@ export default function SearchClient() {
                   onClick={() => updateFilters({ page: num })}
                   className={`w-9 h-9 flex items-center justify-center text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     page === num
-                      ? "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-lg font-black"
+                      ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg font-black"
                       : "bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-zinc-300"
                   }`}
                 >

@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Gang of Three';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Gang of Three'), url('https://fonts.cdnfonts.com/s/5602/go3v2.woff') format('woff');
+}
+
 @import "tailwindcss";
 
 :root {
@@ -15,6 +23,11 @@
   --font-display: var(--font-outfit), sans-serif;
   --font-serif: var(--font-playfair-display), serif;
   --font-space: var(--font-space-grotesk), sans-serif;
+  --font-gang-of-three: 'Gang of Three', sans-serif;
+}
+
+.font-gang-of-three {
+  font-family: 'Gang of Three', sans-serif !important;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -79,10 +92,10 @@ html {
 
 /* Top loading bar styling overrides */
 #nprogress .bar {
-  background: linear-gradient(to right, #d946ef, #06b6d4) !important;
+  background: linear-gradient(to right, #dc2626, #f43f5e) !important;
   height: 3px !important;
 }
 #nprogress .peg {
-  box-shadow: 0 0 10px #d946ef, 0 0 5px #06b6d4 !important;
+  box-shadow: 0 0 10px #dc2626, 0 0 5px #f43f5e !important;
 }
 

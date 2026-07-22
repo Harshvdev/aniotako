@@ -63,7 +63,7 @@ export default async function NotificationsPage() {
         {/* Visual representation of a notification push banner */}
         <div className="w-full max-w-[280px] bg-zinc-950/50 border border-zinc-800/80 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col items-start text-left">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center shadow-lg">
+            <div className="w-6 h-6 rounded bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-lg">
               <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
@@ -73,13 +73,13 @@ export default async function NotificationsPage() {
           <h4 className="text-sm font-bold text-white mb-1">Slime Season 4 - Episode 13</h4>
           <p className="text-xs text-zinc-400 leading-relaxed mb-3">English Subtitles are now available! Tap to track your progress.</p>
           <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-            <div className="h-full w-2/3 bg-gradient-to-r from-fuchsia-500 to-cyan-500 rounded-full" />
+            <div className="h-full w-2/3 bg-gradient-to-r from-red-600 to-rose-500 rounded-full" />
           </div>
         </div>
         
         {/* Decorative floating elements */}
-        <div className="absolute -top-2 -right-2 w-10 h-10 bg-fuchsia-500 rounded-full opacity-20 blur-lg pointer-events-none animate-pulse" />
-        <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-cyan-600/10 rounded-full opacity-30 blur-xl pointer-events-none" />
+        <div className="absolute -top-2 -right-2 w-10 h-10 bg-red-500 rounded-full opacity-20 blur-lg pointer-events-none animate-pulse" />
+        <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-rose-600/10 rounded-full opacity-30 blur-xl pointer-events-none" />
       </div>
     );
 

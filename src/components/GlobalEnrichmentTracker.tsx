@@ -317,7 +317,7 @@ export default function GlobalEnrichmentTracker() {
         {isActive ? (
           <>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-4 h-4 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin shrink-0"></div>
+              <div className="w-4 h-4 border-2 border-zinc-600 border-t-red-500 rounded-full animate-spin shrink-0"></div>
               <p className="text-xs font-bold text-white tracking-wide truncate">
                 {syncStage === "anilist" 
                   ? "Syncing artwork & metadata..." 
@@ -327,7 +327,7 @@ export default function GlobalEnrichmentTracker() {
             
             <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden mb-2">
               <div 
-                className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 h-full transition-all duration-500"
+                className="bg-gradient-to-r from-red-600 to-rose-500 h-full transition-all duration-500"
                 style={{ width: stats.total > 0 ? `${(stats.done / stats.total) * 100}%` : '0%' }}
               />
             </div>

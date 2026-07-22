@@ -129,7 +129,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 mt-4 rounded-lg bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(217,70,239,0.2)]"
+              className="w-full py-3 mt-4 rounded-lg bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(220,38,38,0.3)]"
             >
               {isLoading ? "Creating..." : "Create account"}
             </button>
@@ -138,7 +138,7 @@ export default function SignupPage() {
 
         <div className="mt-6 text-center text-sm text-zinc-500">
           Already have an account?{" "}
-          <Link href="/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+          <Link href="/login" className="text-red-400 hover:text-red-300 font-medium transition-colors">
             Sign in
           </Link>
         </div>

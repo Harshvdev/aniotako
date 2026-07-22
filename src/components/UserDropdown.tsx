@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import SignOutButton from "@/components/SignOutButton";
 
+import UserAvatar from "@/components/UserAvatar";
+
 // THE FIX: Added displayName and avatarInitial to the component props
 export default function UserDropdown({ 
   email, 
@@ -32,14 +34,12 @@ export default function UserDropdown({
       {/* The Trigger Button */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+        className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50"
       >
         <span className="text-sm text-zinc-400 truncate max-w-[120px] md:max-w-xs hidden sm:block">
           {displayName}
         </span>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-sm shadow-inner shrink-0">
-          {avatarInitial}
-        </div>
+        <UserAvatar initial={avatarInitial} size="sm" />
       </button>
 
       {/* The Dropdown Menu */}

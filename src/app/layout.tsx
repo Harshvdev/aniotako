@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, Plus_Jakarta_Sans, Playfair_Display, Outfit, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, Plus_Jakarta_Sans, Playfair_Display, Outfit, JetBrains_Mono, UnifrakturMaguntia } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 
@@ -35,6 +35,12 @@ const outfit = Outfit({
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+});
+
+const unifraktur = UnifrakturMaguntia({
+  weight: "400",
+  variable: "--font-gothic",
   subsets: ["latin"],
 });
 
@@ -105,7 +111,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${playfairDisplay.variable} ${outfit.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${playfairDisplay.variable} ${outfit.variable} ${jetbrainsMono.variable} ${unifraktur.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <NextTopLoader showSpinner={false} height={3} />

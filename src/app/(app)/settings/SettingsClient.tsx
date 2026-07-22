@@ -409,7 +409,7 @@ export default function SettingsClient() {
                 className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all ${
                   isSubscribed 
                     ? "bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700" 
-                    : "bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] disabled:opacity-50"
+                    : "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.3)] disabled:opacity-50"
                 }`}
               >
                 {isSubscribed ? "Disable" : "Enable"}

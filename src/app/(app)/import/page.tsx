@@ -56,7 +56,7 @@ export default async function ImportPage() {
     <div className="relative w-full h-full flex flex-col items-center justify-center text-center p-4">
       {/* Visual representation of an upload/import area */}
       <div className="w-full max-w-[280px] bg-zinc-950/40 border border-zinc-800/80 rounded-2xl p-6 shadow-inner flex flex-col items-center">
-        <div className="w-12 h-12 rounded-full bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4 animate-bounce">
+        <div className="w-12 h-12 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 animate-bounce">
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
@@ -67,17 +67,17 @@ export default async function ImportPage() {
         <div className="w-full space-y-2">
           <div className="flex justify-between items-center bg-zinc-900/50 p-2 rounded-lg border border-zinc-800/40">
             <div className="h-2 w-16 bg-zinc-800 rounded" />
-            <div className="h-3 w-8 bg-fuchsia-500/20 border border-fuchsia-500/30 rounded" />
+            <div className="h-3 w-8 bg-red-500/20 border border-red-500/30 rounded" />
           </div>
           <div className="flex justify-between items-center bg-zinc-900/50 p-2 rounded-lg border border-zinc-800/40">
             <div className="h-2 w-20 bg-zinc-800 rounded" />
-            <div className="h-3 w-8 bg-cyan-500/20 border border-cyan-500/30 rounded" />
+            <div className="h-3 w-8 bg-rose-500/20 border border-rose-500/30 rounded" />
           </div>
         </div>
       </div>
       
       {/* Decorative floating elements */}
-      <div className="absolute -top-4 -left-4 w-16 h-16 bg-gradient-to-br from-cyan-500 to-fuchsia-500 rounded-2xl opacity-10 blur-xl pointer-events-none" />
+      <div className="absolute -top-4 -left-4 w-16 h-16 bg-gradient-to-br from-red-500 to-rose-500 rounded-2xl opacity-10 blur-xl pointer-events-none" />
     </div>
   );
 

@@ -78,7 +78,7 @@ export default function NavbarAuth({
       <Link href="/login" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
         Sign In
       </Link>
-      <Link href="/signup" className="px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white rounded-lg hover:opacity-90 text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(217,70,239,0.3)]">
+      <Link href="/signup" className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg hover:opacity-90 text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(220,38,38,0.3)]">
         Sign Up
       </Link>
     </div>

@@ -401,7 +401,7 @@ export default function AddAnimeSearch() {
                   onClick={() => toggleGenre(genre)}
                   className={`px-3 py-1 text-xs rounded-full font-medium transition-all ${
                     filters.genres.includes(genre)
-                      ? "bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 text-white shadow-md shadow-fuchsia-500/20"
+                      ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/20"
                       : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"
                   }`}
                 >

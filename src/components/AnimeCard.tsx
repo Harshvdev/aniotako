@@ -284,7 +284,7 @@ export default function AnimeCard({ entry, onRemove }: AnimeCardProps) {
 
           <div className="w-full h-1 sm:h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1.5 sm:mt-0">
             <div 
-              className="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-500 rounded-full transition-all duration-300"
+              className="h-full bg-gradient-to-r from-red-600 to-rose-500 rounded-full transition-all duration-300"
               style={{ width: anime.total_episodes ? `${Math.min((anime.watched_episodes / anime.total_episodes) * 100, 100)}%` : '0%' }}
             />
           </div>

@@ -90,7 +90,7 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
 
         {/* Guest Banner */}
         <div className="p-8 rounded-2xl bg-zinc-900/40 border border-zinc-800/60 backdrop-blur-md text-center max-w-2xl mx-auto mb-12 relative overflow-hidden">
-          <div className="absolute -inset-10 bg-gradient-to-br from-fuchsia-500/5 to-cyan-500/5 opacity-50 blur-2xl pointer-events-none" />
+          <div className="absolute -inset-10 bg-gradient-to-br from-red-500/5 to-rose-500/5 opacity-50 blur-2xl pointer-events-none" />
           <h2 className="text-xl font-bold text-white mb-3">Start building your watchlist</h2>
           <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
             Sign in to create your personal watchlist, track your episode progress, and get automated push notifications when new episodes release.
@@ -177,7 +177,7 @@ export default function WatchlistClient({ initialWatchlist, isLoggedIn = true }:
       <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-50">
         <Link
           href="/search"
-          className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.4)] hover:scale-110 active:scale-95 transition-all"
+          className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.4)] hover:scale-110 active:scale-95 transition-all"
         >
           <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
         </Link>

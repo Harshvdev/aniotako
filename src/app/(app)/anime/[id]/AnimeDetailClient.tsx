@@ -540,9 +540,9 @@ function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true 
 
           {/* NEXT EPISODE COUNTDOWN CARD */}
           {showAiringSchedule && (
-            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-fuchsia-950/20 to-zinc-900/90 border border-fuchsia-500/20 shadow-xl">
+            <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-red-950/20 to-zinc-900/90 border border-red-500/20 shadow-xl">
               <div className="mb-3">
-                <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-widest block">
+                <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest block">
                   Episode Airing Schedule
                 </span>
               </div>
@@ -556,7 +556,7 @@ function AnimeDetailInner({ anime, initialEntry, preferences, isLoggedIn = true 
                     <div>
                       <div className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
                         <span>{slot.label}</span>
-                        <span className="text-[11px] text-fuchsia-400 normal-case font-medium">
+                        <span className="text-[11px] text-red-400 normal-case font-medium">
                           {slot.episode ? `(Episode ${slot.episode})` : "(Episode ?)"}
                         </span>
                       </div>
@@ -825,7 +825,7 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone, 
     return (
       <Link 
         href={`/login?next=${encodeURIComponent(nextPath)}`} 
-        className="w-full block text-center py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]"
+        className="w-full block text-center py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(220,38,38,0.3)]"
       >
         Sign in to Track
       </Link>
@@ -834,7 +834,7 @@ function TrackingCard({ entry, isUpdating, onAdd, onUpdate, episodes, timezone, 
 
   if (!entry) {
     return (
-      <AsyncButton onClick={onAdd} disabled={isUpdating} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 disabled:opacity-50 shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+      <AsyncButton onClick={onAdd} disabled={isUpdating} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-sm uppercase tracking-widest hover:opacity-90 disabled:opacity-50 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
         + Add to List
       </AsyncButton>
     );

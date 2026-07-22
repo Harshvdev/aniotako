@@ -402,7 +402,7 @@ export default function CalendarClient() {
               onClick={() => setSelectedDate(d.dateStr)}
               className={`flex flex-col items-center justify-center min-w-[3.5rem] sm:min-w-[4rem] py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all shrink-0 ${
                 isSelected 
-                  ? "bg-gradient-to-b from-fuchsia-600 to-cyan-600 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)] border border-transparent" 
+                  ? "bg-gradient-to-b from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.3)] border border-transparent" 
                   : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800"
               }`}
             >

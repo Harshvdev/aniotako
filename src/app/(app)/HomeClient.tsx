@@ -5,6 +5,7 @@ import SearchBox from "@/components/search/SearchBox";
 import SearchAutocomplete from "@/components/search/SearchAutocomplete";
 import { useAutocompleteSearch, SearchResult } from "@/hooks/useAutocompleteSearch";
 import { useRef, useEffect } from "react";
+import Image from "next/image";
 
 export default function HomeClient() {
   const router = useRouter();
@@ -63,45 +64,56 @@ export default function HomeClient() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 mt-16 sm:mt-24 pb-24 relative z-10 flex flex-col items-center">
-      {/* Hero Header */}
-      <div className="text-center mb-10 max-w-2xl animate-in fade-in slide-in-from-top-4 duration-500">
-        <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white mb-4 bg-gradient-to-r from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent leading-none">
-          Discover & Track
-        </h1>
-        <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-          Create your personalized anime watchlist, check airing countdowns, and get automated notifications for upcoming episodes.
-        </p>
-      </div>
+    <div className="hero">
+      <Image
+        src="/background-image.png"
+        alt="Spider lily background"
+        fill
+        priority
+        className="hero__bg"
+      />
+      <div className="hero__overlay" />
+      <div className="hero__content">
+        {/* Hero Header */}
+        <div className="text-center mb-10 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-500">
+          <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white mb-4 bg-gradient-to-r from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent leading-none">
+            Discover & Track
+          </h1>
+          <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
+            Create your personalized anime watchlist, check airing countdowns, and get automated notifications for upcoming episodes.
+          </p>
+        </div>
 
-      {/* Spotlight Autocomplete Search Box */}
-      <div className="relative w-full max-w-2xl" ref={wrapperRef}>
-        <form onSubmit={handleSearchSubmit}>
-          <SearchBox
-            value={query}
-            onChange={setQuery}
-            onFocus={() => {
-              if (results.length > 0) setShowDropdown(true);
-            }}
-            onKeyDown={handleInputKeyDown}
-            onFilterClick={() => {
-              router.push(`/search?q=${encodeURIComponent(query.trim())}`);
-            }}
-            isFilterActive={false}
-            placeholder="Search anime..."
+        {/* Spotlight Autocomplete Search Box */}
+        <div className="relative w-full max-w-2xl mx-auto" ref={wrapperRef}>
+          <form onSubmit={handleSearchSubmit}>
+            <SearchBox
+              value={query}
+              onChange={setQuery}
+              onFocus={() => {
+                if (results.length > 0) setShowDropdown(true);
+              }}
+              onKeyDown={handleInputKeyDown}
+              onFilterClick={() => {
+                router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+              }}
+              isFilterActive={false}
+              placeholder="Search anime..."
+              loading={loading}
+            />
+          </form>
+
+          <SearchAutocomplete
+            results={results}
+            showDropdown={showDropdown}
+            activeIndex={activeIndex}
             loading={loading}
+            error={error}
+            onSelect={handleSelectAnime}
           />
-        </form>
-
-        <SearchAutocomplete
-          results={results}
-          showDropdown={showDropdown}
-          activeIndex={activeIndex}
-          loading={loading}
-          error={error}
-          onSelect={handleSelectAnime}
-        />
+        </div>
       </div>
     </div>
   );
 }
+

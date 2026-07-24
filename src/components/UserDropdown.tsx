@@ -44,7 +44,7 @@ export default function UserDropdown({
           setIsOpen(!isOpen);
           setIsHelpOpen(false);
         }}
-        className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 pl-4 pr-1.5 py-1.5 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50"
+        className="flex items-center gap-2 rounded-full border-0 sm:border border-zinc-800 bg-transparent sm:bg-zinc-900/50 p-0 sm:pl-3.5 sm:pr-1.5 sm:py-1.5 hover:bg-transparent sm:hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 shrink-0"
       >
         <span className="text-sm text-zinc-400 truncate max-w-[120px] md:max-w-xs hidden sm:block">
           {displayName}

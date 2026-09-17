@@ -48,6 +48,7 @@ next-env.d.ts
 /graphify-out
 /.agents
 /.mimocode
+skills-lock.json
 
 # Prisma
 *.db

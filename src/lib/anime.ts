@@ -187,6 +187,7 @@ export async function getAnimeDetails(malId: number) {
         synopsis: cleanSynopsis,
         poster_url: anilistData.coverImage?.extraLarge || anilistData.coverImage?.large || null,
         cached_at: new Date().toISOString(),
+        popularity: anilistData.popularity || null,
         anilist_raw: anilistData,
         ...(isFinished ? {
           raw_air_at: null,

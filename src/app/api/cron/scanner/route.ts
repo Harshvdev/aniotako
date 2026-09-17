@@ -170,16 +170,19 @@ export async function GET(req: NextRequest) {
     const now = new Date();
 
     // Prune soft-deleted (cleared) notifications older than 14 days to free up storage
-    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    try {
-      await prisma.notifications.deleteMany({
-        where: {
-          is_cleared: true,
-          created_at: { lt: fourteenDaysAgo },
-        },
-      });
-    } catch (pruneError) {
-      console.error("[CRON] Failed to prune old cleared notifications:", pruneError);
+    // Runs once daily (during UTC hour 0) instead of on every scan to prevent constant write locks and WAL churn
+    if (now.getUTCHours() === 0 && now.getUTCMinutes() < 15) {
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+      try {
+        await prisma.notifications.deleteMany({
+          where: {
+            is_cleared: true,
+            created_at: { lt: fourteenDaysAgo },
+          },
+        });
+      } catch (pruneError) {
+        console.error("[CRON] Failed to prune old cleared notifications:", pruneError);
+      }
     }
     const windowStartUnix = Math.floor((now.getTime() - 5 * 60 * 1000) / 1000);
     const windowEndUnix = Math.floor((now.getTime() + 2 * 60 * 60 * 1000) / 1000);
@@ -246,6 +249,8 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Step 2: Fetch All Anime Metadata from Supabase ---
+    // Select only lightweight scalar columns without anilist_raw (large JSON TOAST blobs)
+    // to preserve database buffer cache and eliminate disk read I/O.
     const { data: watchedRows, error: dbError } = await supabase
       .from("anime_metadata")
       .select(`
@@ -255,9 +260,16 @@ export async function GET(req: NextRequest) {
         title_english,
         title_romaji,
         title_native,
-        anilist_raw,
         poster_url,
-        airing_status
+        airing_status,
+        raw_air_at,
+        sub_air_at,
+        dub_air_at,
+        raw_next_episode_number,
+        sub_next_episode_number,
+        dub_next_episode_number,
+        next_episode_number,
+        next_airing_at
       `)
       .not("anilist_id", "is", null)
       .limit(10000);
@@ -279,6 +291,7 @@ export async function GET(req: NextRequest) {
     const anilistToMalMap = new Map<number, number>();
     const malToPosterUrlMap = new Map<number, string | null>();
     const titleToAnilistIdMap = new Map<string, number>();
+    const existingScheduleMap = new Map<number, any>();
 
     const addWatchedTitle = (title: unknown, anilistId: number) => {
       const key = normalizeText(title);
@@ -302,14 +315,22 @@ export async function GET(req: NextRequest) {
         if (malId) {
           anilistToMalMap.set(anilistId, malId);
           malToPosterUrlMap.set(malId, row.poster_url ?? null);
+          existingScheduleMap.set(malId, {
+            raw_air_at: row.raw_air_at !== null ? Number(row.raw_air_at) : null,
+            sub_air_at: row.sub_air_at !== null ? Number(row.sub_air_at) : null,
+            dub_air_at: row.dub_air_at !== null ? Number(row.dub_air_at) : null,
+            raw_next_episode_number: row.raw_next_episode_number ?? null,
+            sub_next_episode_number: row.sub_next_episode_number ?? null,
+            dub_next_episode_number: row.dub_next_episode_number ?? null,
+            next_episode_number: row.next_episode_number ?? null,
+            next_airing_at: row.next_airing_at !== null ? Number(row.next_airing_at) : null,
+          });
         }
 
         addWatchedTitle(row.title, anilistId);
         addWatchedTitle(row.title_english, anilistId);
         addWatchedTitle(row.title_romaji, anilistId);
         addWatchedTitle(row.title_native, anilistId);
-
-
       }
     });
 
@@ -468,11 +489,31 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Bulk execute database metadata updates matching unique target schema constraint ('mal_id') from File 1
-    let cacheUpdatedCount = 0;
+    // Bulk execute database metadata updates matching unique target schema constraint ('mal_id')
+    // Write Optimization: Only upsert shows whose schedule data has actually changed.
+    // This reduces database writes from 100+ per run down to ~0-2 per run, stopping WAL bloat.
     const dbPayloads = upsertPayloads.map(({ title, poster_url, route, is_finished, ...dbData }) => dbData);
-    for (let i = 0; i < dbPayloads.length; i += DB_BATCH_SIZE) {
-      const chunk = dbPayloads.slice(i, i + DB_BATCH_SIZE);
+    const changedDbPayloads = dbPayloads.filter((payload) => {
+      if (!payload.mal_id) return true;
+      const existing = existingScheduleMap.get(Number(payload.mal_id));
+      if (!existing) return true;
+
+      const isSame =
+        Number(existing.raw_air_at ?? 0) === Number(payload.raw_air_at ?? 0) &&
+        Number(existing.sub_air_at ?? 0) === Number(payload.sub_air_at ?? 0) &&
+        Number(existing.dub_air_at ?? 0) === Number(payload.dub_air_at ?? 0) &&
+        Number(existing.raw_next_episode_number ?? 0) === Number(payload.raw_next_episode_number ?? 0) &&
+        Number(existing.sub_next_episode_number ?? 0) === Number(payload.sub_next_episode_number ?? 0) &&
+        Number(existing.dub_next_episode_number ?? 0) === Number(payload.dub_next_episode_number ?? 0) &&
+        Number(existing.next_episode_number ?? 0) === Number(payload.next_episode_number ?? 0) &&
+        Number(existing.next_airing_at ?? 0) === Number(payload.next_airing_at ?? 0);
+
+      return !isSame;
+    });
+
+    let cacheUpdatedCount = 0;
+    for (let i = 0; i < changedDbPayloads.length; i += DB_BATCH_SIZE) {
+      const chunk = changedDbPayloads.slice(i, i + DB_BATCH_SIZE);
       const { error: upsertError } = await supabase
         .from("anime_metadata")
         .upsert(chunk, { onConflict: "mal_id" });

@@ -95,9 +95,11 @@ export async function POST(req: Request) {
       // 1. Prepare metadata upsert
       const statusUpper = metadata.airing_status?.toUpperCase();
       const isFinished = statusUpper === "FINISHED" || statusUpper === "FINISHED AIRING" || statusUpper === "CANCELLED";
+      const popularity = metadata.popularity ?? metadata.anilist_raw?.popularity ?? null;
 
       metadataUpserts.push({
         ...metadata,
+        ...(popularity !== null ? { popularity } : {}),
         mal_id,
         cached_at: new Date().toISOString(),
         ...(isFinished ? {
